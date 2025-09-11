@@ -7,6 +7,10 @@ pub enum Token {
     String(String),
     Bool(bool),
     Nil,
+    Quote,          // '
+    Quasiquote,     // `
+    Unquote,        // ,
+    Splice,         // ,@
 }
 
 pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
@@ -53,6 +57,17 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                     chars.next();
                 }
             },
+            '\'' => tokens.push(Token::Quote),
+            '`' => tokens.push(Token::Quasiquote),
+            ',' => {
+                // Check for ,@ (splice)
+                if let Some((_, '@')) = chars.peek() {
+                    chars.next(); // consume @
+                    tokens.push(Token::Splice);
+                } else {
+                    tokens.push(Token::Unquote);
+                }
+            },
             ch if ch.is_whitespace() => {},
             ch if ch.is_ascii_digit() || ch == '-' || ch == '+' => {
                 let start_pos = pos;
@@ -87,7 +102,8 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
                 symbol.push(ch);
                 
                 while let Some((_, next_ch)) = chars.peek() {
-                    if next_ch.is_whitespace() || *next_ch == '(' || *next_ch == ')' || *next_ch == '"' {
+                    if next_ch.is_whitespace() || *next_ch == '(' || *next_ch == ')' || *next_ch == '"' || 
+                       *next_ch == '\'' || *next_ch == '`' || *next_ch == ',' {
                         break;
                     }
                     symbol.push(*next_ch);
@@ -145,6 +161,72 @@ mod tests {
             Token::Bool(true),
             Token::Bool(false),
             Token::Nil,
+            Token::RightParen,
+        ]);
+    }
+
+    #[test]
+    fn test_quote_tokens() {
+        let input = "'(+ 1 2)";
+        let tokens = tokenize(input).unwrap();
+        assert_eq!(tokens, vec![
+            Token::Quote,
+            Token::LeftParen,
+            Token::Symbol("+".to_string()),
+            Token::Number(1.0),
+            Token::Number(2.0),
+            Token::RightParen,
+        ]);
+    }
+
+    #[test]
+    fn test_quasiquote_tokens() {
+        let input = "`(+ ,x ,(* 2 3))";
+        let tokens = tokenize(input).unwrap();
+        assert_eq!(tokens, vec![
+            Token::Quasiquote,
+            Token::LeftParen,
+            Token::Symbol("+".to_string()),
+            Token::Unquote,
+            Token::Symbol("x".to_string()),
+            Token::Unquote,
+            Token::LeftParen,
+            Token::Symbol("*".to_string()),
+            Token::Number(2.0),
+            Token::Number(3.0),
+            Token::RightParen,
+            Token::RightParen,
+        ]);
+    }
+
+    #[test]
+    fn test_splice_tokens() {
+        let input = "`(list ,@items)";
+        let tokens = tokenize(input).unwrap();
+        assert_eq!(tokens, vec![
+            Token::Quasiquote,
+            Token::LeftParen,
+            Token::Symbol("list".to_string()),
+            Token::Splice,
+            Token::Symbol("items".to_string()),
+            Token::RightParen,
+        ]);
+    }
+
+    #[test]
+    fn test_mixed_quote_tokens() {
+        let input = "'x `(+ ,a ,@b)";
+        let tokens = tokenize(input).unwrap();
+        assert_eq!(tokens, vec![
+            Token::Quote,
+            Token::Symbol("x".to_string()),
+            Token::Quasiquote,
+            Token::LeftParen,
+            Token::Symbol("+".to_string()),
+            Token::Unquote,
+            Token::Symbol("a".to_string()),
+            Token::Splice,
+            Token::Symbol("b".to_string()),
             Token::RightParen,
         ]);
     }
