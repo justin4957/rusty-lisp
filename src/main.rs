@@ -2,6 +2,7 @@ mod lexer;
 mod parser;
 mod compiler;
 mod ast;
+mod macro_expander;
 
 use std::env;
 use std::fs;
@@ -36,6 +37,21 @@ fn main() {
 fn compile_lisp(source: &str) -> Result<String, String> {
     let tokens = lexer::tokenize(source)?;
     let ast = parser::parse(tokens)?;
-    let rust_code = compiler::compile_to_rust(&ast)?;
+    
+    // Expand macros in the AST
+    let mut expander = macro_expander::MacroExpander::new();
+    let mut expanded_ast = Vec::new();
+    
+    for expr in ast {
+        let expanded = expander.expand_all(expr)
+            .map_err(|e| format!("Macro expansion error: {}", e))?;
+        
+        // Skip Nil expressions (from macro definitions)
+        if !matches!(expanded, ast::LispExpr::Nil) {
+            expanded_ast.push(expanded);
+        }
+    }
+    
+    let rust_code = compiler::compile_to_rust(&expanded_ast)?;
     Ok(rust_code)
 }
