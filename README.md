@@ -33,10 +33,11 @@ The result is a unique language perfect for AI agents, rapid prototyping, and sy
 ### Macro System (In Development)
 - **Extended AST** - Full macro infrastructure with Quote, Unquote, Quasiquote, and Splice support ✅
 - **Macro Definitions** - `defmacro` syntax parsing with parameter lists and `&rest` support ✅
+- **Quote Family** - Complete quote/unquote/quasiquote/splice parsing (shorthand & longhand) ✅
 - **Hygienic Macros** - Gensym support for variable capture prevention
 - **Code-as-Data** - Homoiconic design for AI agent manipulation
 
-> 📍 **Status**: Phase 1.1 (Core Macro Infrastructure) - AST ✅ and Parser ✅ complete. See [GitHub Issues](https://github.com/justin4957/rusty-lisp/issues) for implementation progress.
+> 📍 **Status**: Phase 1.1 (Core Macro Infrastructure) - AST ✅, Parser ✅, and Quote Syntax ✅ complete. See [GitHub Issues](https://github.com/justin4957/rusty-lisp/issues) for implementation progress.
 
 ## Quick Start
 
@@ -119,7 +120,7 @@ rustc output.rs -o program && ./program
      (+ x y))
 ```
 
-### Macro System (Parsing Available)
+### Macro System (Parsing Implemented)
 ```lisp
 ; Macro definitions (parsing implemented)
 (defmacro when (condition &rest body)
@@ -129,13 +130,17 @@ rustc output.rs -o program && ./program
 (defmacro unless (condition body)
   (if (not condition) body nil))
 
-; Note: Parser can handle defmacro syntax, but macro expansion
-; is not yet implemented. See Phase 1.2 in roadmap.
+; Quote family - Both shorthand and longhand forms supported
+'(+ 1 2 3)                    ; Quote shorthand
+(quote (+ 1 2 3))            ; Quote longhand
 
-; Quote family (AST support available)
-'(+ 1 2 3)              ; Quote
-`(+ ,x ,(* 2 3))        ; Quasiquote with unquote
-`(list ,@numbers)       ; Splice operation
+`(+ ,x ,(* 2 3))             ; Quasiquote with unquote shorthand
+(quasiquote (+ (unquote x) (unquote (* 2 3))))  ; Longhand
+
+`(list ,@numbers)            ; Splice shorthand  
+(quasiquote (list (unquote-splicing numbers)))  ; Splice longhand
+
+; Note: Full parsing implemented. Macro expansion coming in Phase 1.2
 ```
 
 ## Examples

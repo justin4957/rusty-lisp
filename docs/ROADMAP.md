@@ -66,7 +66,7 @@ pub enum LispExpr {
 ### Deliverables:
 - [x] Extended AST with macro support ✅ **COMPLETED** - [PR #feature/extend-ast-macro-support]
 - [x] Macro definition parser (`defmacro`) ✅ **COMPLETED** - [PR #feature/defmacro-parser] - [Issue #2](https://github.com/justin4957/rusty-lisp/issues/2)
-- [ ] Quote/unquote/quasiquote syntax 📋 **PLANNED** - [Issue #3](https://github.com/justin4957/rusty-lisp/issues/3)
+- [x] Quote/unquote/quasiquote syntax ✅ **COMPLETED** - [PR #feature/quote-syntax-parsing] - [Issue #3](https://github.com/justin4957/rusty-lisp/issues/3)
 - [ ] Basic macro expansion engine 📋 **PLANNED** - [Issue #4](https://github.com/justin4957/rusty-lisp/issues/4)
 - [ ] Hygienic macro system (gensym) 📋 **PLANNED** - [Issue #5](https://github.com/justin4957/rusty-lisp/issues/5)
 
