@@ -74,6 +74,13 @@ impl Parser {
     fn parse_list(&mut self) -> Result<LispExpr, String> {
         self.advance();
         
+        // Check if this is a defmacro
+        if let Some(Token::Symbol(s)) = self.peek() {
+            if s == "defmacro" {
+                return self.parse_defmacro();
+            }
+        }
+        
         let mut elements = Vec::new();
         
         while let Some(token) = self.peek() {
@@ -89,6 +96,72 @@ impl Parser {
         }
         
         Err("Unclosed list - missing ')'".to_string())
+    }
+
+    fn parse_defmacro(&mut self) -> Result<LispExpr, String> {
+        // Consume 'defmacro'
+        self.advance();
+        
+        // Parse macro name
+        let name = match self.peek() {
+            Some(Token::Symbol(s)) => {
+                let name = s.clone();
+                self.advance();
+                name
+            },
+            _ => return Err("Missing macro name after 'defmacro'".to_string()),
+        };
+        
+        // Parse parameter list
+        let parameters = match self.peek() {
+            Some(Token::LeftParen) => {
+                self.parse_parameter_list()?
+            },
+            _ => return Err("Missing parameter list for macro definition".to_string()),
+        };
+        
+        // Parse macro body
+        let body = match self.peek() {
+            Some(Token::RightParen) => return Err("Missing macro body".to_string()),
+            Some(_) => {
+                let body = self.parse_expression()?;
+                Box::new(body)
+            },
+            None => return Err("Missing macro body".to_string()),
+        };
+        
+        // Consume closing paren
+        match self.peek() {
+            Some(Token::RightParen) => {
+                self.advance();
+            },
+            _ => return Err("Expected ')' after macro definition".to_string()),
+        }
+        
+        Ok(LispExpr::Macro { name, parameters, body })
+    }
+    
+    fn parse_parameter_list(&mut self) -> Result<Vec<String>, String> {
+        // Consume opening paren
+        self.advance();
+        
+        let mut parameters = Vec::new();
+        
+        while let Some(token) = self.peek() {
+            match token {
+                Token::RightParen => {
+                    self.advance();
+                    return Ok(parameters);
+                },
+                Token::Symbol(s) => {
+                    parameters.push(s.clone());
+                    self.advance();
+                },
+                _ => return Err("Expected symbol in parameter list".to_string()),
+            }
+        }
+        
+        Err("Unclosed parameter list - missing ')'".to_string())
     }
 }
 
@@ -132,5 +205,84 @@ mod tests {
                 LispExpr::Number(3.0),
             ])
         ]);
+    }
+
+    #[test]
+    fn test_parse_basic_defmacro() {
+        let tokens = tokenize("(defmacro when (condition) body)").unwrap();
+        let ast = parse(tokens).unwrap();
+        
+        assert_eq!(ast.len(), 1);
+        match &ast[0] {
+            LispExpr::Macro { name, parameters, body } => {
+                assert_eq!(name, "when");
+                assert_eq!(parameters, &vec!["condition".to_string()]);
+                assert_eq!(**body, LispExpr::Symbol("body".to_string()));
+            },
+            _ => panic!("Expected Macro variant"),
+        }
+    }
+
+    #[test]
+    fn test_parse_defmacro_with_rest_params() {
+        let tokens = tokenize("(defmacro when (condition &rest body) nil)").unwrap();
+        let ast = parse(tokens).unwrap();
+        
+        assert_eq!(ast.len(), 1);
+        match &ast[0] {
+            LispExpr::Macro { name, parameters, body } => {
+                assert_eq!(name, "when");
+                assert_eq!(parameters, &vec!["condition".to_string(), "&rest".to_string(), "body".to_string()]);
+                assert_eq!(**body, LispExpr::Nil);
+            },
+            _ => panic!("Expected Macro variant"),
+        }
+    }
+
+    #[test]
+    fn test_parse_defmacro_with_complex_body() {
+        let tokens = tokenize("(defmacro when (condition &rest body) (if condition (progn body) nil))").unwrap();
+        let ast = parse(tokens).unwrap();
+        
+        assert_eq!(ast.len(), 1);
+        match &ast[0] {
+            LispExpr::Macro { name, parameters, body } => {
+                assert_eq!(name, "when");
+                assert_eq!(parameters, &vec!["condition".to_string(), "&rest".to_string(), "body".to_string()]);
+                // Body should be a list representing (if condition (progn body) nil)
+                match body.as_ref() {
+                    LispExpr::List(elements) => {
+                        assert_eq!(elements.len(), 4);
+                        assert_eq!(elements[0], LispExpr::Symbol("if".to_string()));
+                    },
+                    _ => panic!("Expected List for macro body"),
+                }
+            },
+            _ => panic!("Expected Macro variant"),
+        }
+    }
+
+    #[test]
+    fn test_parse_defmacro_error_missing_name() {
+        let tokens = tokenize("(defmacro)").unwrap();
+        let result = parse(tokens);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Missing macro name"));
+    }
+
+    #[test]
+    fn test_parse_defmacro_error_missing_params() {
+        let tokens = tokenize("(defmacro test)").unwrap();
+        let result = parse(tokens);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Missing parameter list"));
+    }
+
+    #[test]
+    fn test_parse_defmacro_error_missing_body() {
+        let tokens = tokenize("(defmacro test ())").unwrap();
+        let result = parse(tokens);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Missing macro body"));
     }
 }

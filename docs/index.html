@@ -66,7 +66,7 @@
         <main class="content-main">
             <section id="overview" class="content-section">
                 <h2>Overview</h2>
-                <p>The Lisp Compiler is a complete implementation of a Lisp-to-Rust compiler that transforms Lisp S-expressions into efficient, native Rust code. The compiler follows a traditional compilation pipeline with lexical analysis, parsing, and code generation phases.</p>
+                <p>The Lisp Compiler is a next-generation Lisp-to-Rust compiler that transforms Lisp S-expressions into efficient, native Rust code. Featuring advanced macro parsing capabilities and designed for AI agent code manipulation, the compiler follows a traditional compilation pipeline with lexical analysis, parsing, and code generation phases.</p>
                 
                 <div class="feature-grid">
                     <div class="feature-card">
@@ -84,6 +84,10 @@
                     <div class="feature-card">
                         <h3>🧪 Well Tested</h3>
                         <p>Extensive test suite covering all language features</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>🔧 Macro System</h3>
+                        <p>Advanced defmacro parsing with parameter lists and &rest support</p>
                     </div>
                 </div>
             </section>
@@ -332,6 +336,24 @@ custom-func</code></pre>
 (list (list 1 2) (list 3 4))</code></pre>
                         </div>
                     </div>
+                    
+                    <div class="example-card">
+                        <h3>Macro Definitions (Parsing)</h3>
+                        <div class="code-block">
+                            <pre><code class="language-lisp">; Basic macro definition
+(defmacro when (condition body)
+  (if condition body nil))
+
+; Macro with &rest parameters
+(defmacro when (condition &rest body)
+  `(if ,condition (progn ,@body) nil))
+
+; Complex macro bodies
+(defmacro unless (test &rest body)
+  `(if (not ,test) (progn ,@body)))</code></pre>
+                        </div>
+                        <p><em>Note: Parsing implemented, expansion in development</em></p>
+                    </div>
                 </div>
             </section>
 
@@ -368,6 +390,13 @@ custom-func</code></pre>
                         <li><code>Bool(bool)</code> - Boolean values</li>
                         <li><code>Nil</code> - Nil value</li>
                         <li><code>List(Vec&lt;LispExpr&gt;)</code> - S-expressions</li>
+                        <li><code>Macro { name, parameters, body }</code> - Macro definitions</li>
+                        <li><code>MacroCall { name, args }</code> - Macro invocations</li>
+                        <li><code>Quote(Box&lt;LispExpr&gt;)</code> - Quoted expressions</li>
+                        <li><code>Quasiquote(Box&lt;LispExpr&gt;)</code> - Quasiquoted expressions</li>
+                        <li><code>Unquote(Box&lt;LispExpr&gt;)</code> - Unquoted expressions</li>
+                        <li><code>Splice(Box&lt;LispExpr&gt;)</code> - Splice operations</li>
+                        <li><code>Gensym(String)</code> - Generated symbols</li>
                     </ul>
                 </div>
 
