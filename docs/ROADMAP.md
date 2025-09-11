@@ -16,12 +16,15 @@ Our Lisp compiler currently provides:
 - Rust's memory safety and performance
 - Existing test infrastructure
 
-## Vision: Next-Generation Lisp-Rust Hybrid
+## Vision: AI Agent Code Generation Platform
 
-Transform our compiler into a powerful system that:
-1. **Leverages Macros** for code generation and DSL creation
-2. **Exploits Homoiconicity** for AI agent code understanding and manipulation
-3. **Integrates Rust Features** for concurrency, type safety, and performance
+Transform our compiler from a "Lisp-to-Rust transpiler" into the **first runtime environment designed for safe, observable, and efficient code generation by AI agents**:
+
+1. **AI-Native Interface** - JSON IR and AST transformation hooks for seamless agent integration
+2. **Homoiconic Manipulation** - Direct AST operations optimized for AI code understanding and modification
+3. **Safety & Validation** - Sandbox environment preventing harmful or invalid AI-generated code
+4. **Observability First** - AST visualization, annotated output, and debugging tools for human-AI collaboration
+5. **Agent-Oriented Concurrency** - Actor model primitives designed around multi-agent AI systems
 
 ---
 
@@ -95,6 +98,59 @@ impl MacroExpander {
 
 ---
 
+# Phase 1.5: AI Interface Layer 🤖
+**Duration: 2-3 weeks | Priority: High (AI-Critical)**
+
+## 1.5.1 JSON Intermediate Representation
+
+### Serializable AST Format
+```json
+{
+  "type": "CallExpr",
+  "func": { "type": "Symbol", "value": "+" },
+  "args": [
+    { "type": "Number", "value": 1 },
+    { "type": "Number", "value": 2 }
+  ]
+}
+```
+
+### Benefits for AI Agents
+- **Easier Generation**: LLMs excel at producing valid JSON vs. Lisp syntax
+- **Error Reduction**: Structured data reduces parsing failures
+- **Tool Integration**: External analysis and transformation tools
+
+### Deliverables:
+- [ ] JSON AST serialization/deserialization
+- [ ] CLI flag: `--from-ir example.ir.json`
+- [ ] Round-trip validation (Lisp → JSON → Lisp)
+- [ ] JSON schema documentation
+
+## 1.5.2 AST Transformation Hooks
+
+### Transform Pipeline Architecture
+```rust
+pub trait ASTTransform {
+    fn transform(&self, ast: &mut LispExpr) -> Result<(), TransformError>;
+}
+
+// Pipeline: Source → Lexer → Parser → [AI HOOKS] → Macro Expander → Compiler
+```
+
+### AI Agent Capabilities
+- **Direct AST Manipulation**: Refactor, optimize, style-check
+- **Pattern Recognition**: Identify and transform code structures
+- **Code Injection**: Add logging, metrics, instrumentation
+- **Validation**: Pre-expansion error detection
+
+### Deliverables:
+- [ ] `ASTTransform` trait and plugin system
+- [ ] Transform registry and loading mechanism
+- [ ] Echo transform (debugging/testing)
+- [ ] CLI integration: `--transforms plugin1,plugin2`
+
+---
+
 # Phase 2: Advanced Homoiconicity
 **Duration: 3-4 weeks | Priority: High**
 
@@ -162,50 +218,145 @@ pub struct CodeAnalyzer {
 
 ---
 
-# Phase 3: Rust Integration Layer  
-**Duration: 5-7 weeks | Priority: Medium-High**
+# Phase 2.1: Safety & Validation 🛡️
+**Duration: 2-3 weeks | Priority: High (AI-Critical)**
 
-## 3.1 Type System Bridge
+## 2.1.1 AST Validation Engine
 
-### Rust Type Integration
-```lisp
-; Declare Rust types in Lisp
-(declare-type Point (struct (x f64) (y f64)))
-(declare-type Result (enum (Ok T) (Err E)))
-
-; Use Rust's type system
-(define point (Point 3.0 4.0))
-(define distance (sqrt (+ (* (. point x) (. point x))
-                         (* (. point y) (. point y)))))
-```
-
-### Type Inference Engine
+### Safety Constraints for AI-Generated Code
 ```rust
-pub struct TypeInferrer {
-    fn infer_type(&mut self, expr: &LispExpr) -> Result<RustType, TypeError>
-    fn unify_types(&mut self, expected: RustType, actual: RustType) -> Result<RustType, TypeError>
-    fn generate_rust_type_annotations(&self, expr: &LispExpr) -> String
-}
-
-#[derive(Debug, Clone)]
-pub enum RustType {
-    I32, I64, F32, F64, Bool, String,
-    Vec(Box<RustType>),
-    Option(Box<RustType>),
-    Result(Box<RustType>, Box<RustType>),
-    Struct(String, Vec<(String, RustType)>),
-    Enum(String, Vec<(String, Vec<RustType>)>),
-    Generic(String),
+pub enum ValidationRule {
+    TypeSafety,          // Catch basic type mismatches
+    ResourceBounds,      // Prevent infinite loops/recursion  
+    FFIRestrictions,     // Control unsafe Rust access
+    ComplexityLimits,    // Bound computational complexity
 }
 ```
+
+### Validation Categories
+- **Syntax Validation**: Well-formed AST structures
+- **Type Checking**: Basic type inference and consistency
+- **Resource Analysis**: Detect obvious infinite loops, unbounded recursion
+- **Security Sandbox**: Restrict access to dangerous Rust features
 
 ### Deliverables:
-- [ ] Rust type system representation
-- [ ] Type inference for Lisp expressions
-- [ ] Compile-time type checking
-- [ ] Generated Rust code with proper type annotations
+- [ ] `ASTValidator` trait and validation engine
+- [ ] Type inference system for basic safety
+- [ ] Resource bounds analysis (loop/recursion detection)
+- [ ] FFI safety controls (unsafe code restrictions)
+- [ ] CLI integration: `--validate-safety`
 
-## 3.2 Concurrency Primitives
+## 2.1.2 Trust & Sandbox Environment
+
+### Controlled Execution Environment
+- **Capability-based Security**: Define allowed operations for AI agents
+- **Resource Limits**: Memory, computation time, file system access
+- **API Boundaries**: Safe subset of Rust standard library
+
+### Deliverables:
+- [ ] Sandbox runtime environment
+- [ ] Capability permission system
+- [ ] Resource monitoring and limits
+- [ ] Safe API surface definition
+
+---
+
+# Phase 2.5: Observability & Debugging 🔍
+**Duration: 2-3 weeks | Priority: High (Human-AI Collaboration)**
+
+## 2.5.1 AST Visualization Tools
+
+### Visual Debugging for AI-Generated Code
+```bash
+# Generate visual AST representations
+lisp-compiler --ast-visual example.lisp > graph.html
+lisp-compiler --ast-dot example.lisp | dot -Tpng > ast.png
+```
+
+### Interactive AST Explorer
+- **Web-based Interface**: Navigate and inspect AST structures
+- **Transformation Tracking**: Before/after views of AI modifications
+- **Pattern Highlighting**: Visualize recognized code patterns
+
+### Deliverables:
+- [ ] AST to DOT graph converter
+- [ ] HTML visualization generator  
+- [ ] Interactive web-based AST explorer
+- [ ] Diff visualization for transformations
+
+## 2.5.2 Annotated Code Generation
+
+### Rust Output with Provenance Tracking
+```rust
+// Generated from: (let ((x 10)) (* x 2))
+{
+    let x = 10; // FROM: (let ((x 10)) ...)  
+    x * 2       // FROM: (* x 2)
+}
+```
+
+### Human-Readable AI Debugging
+- **Source Mapping**: Link Rust code back to original Lisp
+- **Transformation History**: Track AI modifications through the pipeline
+- **Decision Explanations**: Comment rationale for AI-generated patterns
+
+### Deliverables:
+- [ ] Source mapping infrastructure
+- [ ] Annotated Rust code generation
+- [ ] Transformation provenance tracking
+- [ ] REPL with history and rollback
+
+---
+
+# Phase 3: Agent-Oriented Concurrency 🤖
+**Duration: 4-5 weeks | Priority: Medium-High**
+
+## 3.1 Actor Model Foundation
+
+### Agent-First Concurrency Design
+Design concurrency primitives around the **agent metaphor** rather than generic threading:
+
+```lisp
+;; Define an agent (actor) with state and behavior
+(defagent calculator-agent (state)
+  (receive
+   ((:add value) (calculator-agent (+ state value)))
+   ((:multiply value) (calculator-agent (* state value)))
+   ((:get caller) (send caller state) (calculator-agent state))
+   ((:reset) (calculator-agent 0))))
+```
+
+### Multi-Agent System Primitives
+```lisp
+;; Spawn agents and coordinate behavior
+(let ((calc (spawn calculator-agent 0))
+      (logger (spawn logger-agent "calc.log")))
+  ;; Send messages between agents
+  (send calc (:add 10))
+  (send calc (:multiply 2))
+  (send logger (:log "calculation started"))
+  
+  ;; Get result
+  (send calc (:get self))
+  (receive (result 
+    (println "Final result:" result)
+    (send logger (:log (format "result: {}" result))))))
+```
+
+### AI Agent Communication Patterns
+- **Request-Response**: Synchronous agent interactions
+- **Event Broadcasting**: One-to-many notifications  
+- **Pipeline Processing**: Chain agents for data transformation
+- **Supervision Trees**: Hierarchical agent management
+
+### Deliverables:
+- [ ] `defagent` macro for actor definition
+- [ ] `spawn`, `send`, `receive` primitives
+- [ ] Message passing infrastructure (compiles to tokio/async)
+- [ ] Agent lifecycle management
+- [ ] Inter-agent communication patterns
+
+## 3.2 AI Agent Runtime Environment
 
 ### Async/Await Integration
 ```lisp
