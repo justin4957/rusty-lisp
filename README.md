@@ -1,6 +1,24 @@
 # Lisp Compiler
 
-A Lisp-to-Rust compiler written in Rust that transforms Lisp S-expressions into efficient native Rust code.
+A next-generation Lisp-to-Rust compiler that combines Lisp's flexibility with Rust's performance and safety, designed for AI agent code manipulation and advanced metaprogramming.
+
+## Vision
+
+This project aims to create a powerful language that uniquely combines:
+
+- **Lisp's Flexibility** - Full macro system and homoiconicity for dynamic code generation
+- **Rust's Performance** - Zero-cost abstractions, memory safety, and native speed  
+- **AI-First Design** - Code-as-data manipulation optimized for AI agents and automated refactoring
+- **Modern Concurrency** - Built-in async/await, channels, and actor model support
+
+### Key Differentiators
+
+🔧 **Macro System** - Powerful compile-time code generation and DSL creation  
+🤖 **AI Integration** - Direct AST manipulation for intelligent code analysis and transformation  
+⚡ **Rust Integration** - Seamless interop with Rust's type system and concurrency primitives  
+🚀 **Performance** - Compiles to efficient Rust code with minimal overhead
+
+The result is a unique language perfect for AI agents, rapid prototyping, and systems where code-as-data manipulation provides significant advantages.
 
 ## Features
 
