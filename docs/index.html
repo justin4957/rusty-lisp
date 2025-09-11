@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="Lisp Compiler Documentation">
+    <title>Lisp Compiler Documentation</title>
+    <link rel="stylesheet" href="css/docs.css">
+    <script src="js/docs.js" defer></script>
+</head>
+<body class="sidebar-open">
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h1 class="sidebar-title">
+                <a href="index.html">Lisp Compiler</a>
+            </h1>
+            <span class="sidebar-version">v0.0.1</span>
+        </div>
+        <nav class="sidebar-nav">
+            <ul class="sidebar-nav-list">
+                <li class="sidebar-nav-item">
+                    <a href="#overview" class="sidebar-nav-link">Overview</a>
+                </li>
+                <li class="sidebar-nav-item">
+                    <a href="#getting-started" class="sidebar-nav-link">Getting Started</a>
+                </li>
+                <li class="sidebar-nav-item">
+                    <a href="#language-reference" class="sidebar-nav-link">Language Reference</a>
+                    <ul class="sidebar-subnav">
+                        <li><a href="#data-types" class="sidebar-subnav-link">Data Types</a></li>
+                        <li><a href="#operations" class="sidebar-subnav-link">Operations</a></li>
+                        <li><a href="#control-flow" class="sidebar-subnav-link">Control Flow</a></li>
+                    </ul>
+                </li>
+                <li class="sidebar-nav-item">
+                    <a href="#examples" class="sidebar-nav-link">Examples</a>
+                </li>
+                <li class="sidebar-nav-item">
+                    <a href="#api-reference" class="sidebar-nav-link">API Reference</a>
+                    <ul class="sidebar-subnav">
+                        <li><a href="#lexer" class="sidebar-subnav-link">Lexer</a></li>
+                        <li><a href="#parser" class="sidebar-subnav-link">Parser</a></li>
+                        <li><a href="#compiler" class="sidebar-subnav-link">Compiler</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </nav>
+    </div>
+
+    <div class="content-wrapper">
+        <header class="content-header">
+            <div class="content-header-actions">
+                <button class="sidebar-toggle" aria-label="Toggle sidebar">
+                    <span class="hamburger-line"></span>
+                    <span class="hamburger-line"></span>
+                    <span class="hamburger-line"></span>
+                </button>
+            </div>
+            <div class="content-header-title">
+                <h1>Lisp Compiler Documentation</h1>
+                <p class="content-header-subtitle">A Lisp-to-Rust compiler written in Rust</p>
+            </div>
+        </header>
+
+        <main class="content-main">
+            <section id="overview" class="content-section">
+                <h2>Overview</h2>
+                <p>The Lisp Compiler is a complete implementation of a Lisp-to-Rust compiler that transforms Lisp S-expressions into efficient, native Rust code. The compiler follows a traditional compilation pipeline with lexical analysis, parsing, and code generation phases.</p>
+                
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h3>🚀 Fast Compilation</h3>
+                        <p>Direct compilation to native Rust code for maximum performance</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>🛡️ Type Safety</h3>
+                        <p>Leverages Rust's type system for memory safety and reliability</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>📝 Complete Implementation</h3>
+                        <p>Full lexer, parser, and code generator with comprehensive error handling</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>🧪 Well Tested</h3>
+                        <p>Extensive test suite covering all language features</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="getting-started" class="content-section">
+                <h2>Getting Started</h2>
+                
+                <h3>Installation</h3>
+                <div class="code-block">
+                    <pre><code class="language-bash">git clone &lt;repository-url&gt;
+cd lisp-compiler
+cargo build --release</code></pre>
+                </div>
+
+                <h3>Basic Usage</h3>
+                <p>Create a Lisp file and compile it to Rust:</p>
+                
+                <div class="example-block">
+                    <div class="example-header">
+                        <span class="example-title">example.lisp</span>
+                    </div>
+                    <div class="code-block">
+                        <pre><code class="language-lisp">(+ 1 2 3)
+(* (+ 2 3) 4)
+(if (&gt; 10 5) "greater" "less")</code></pre>
+                    </div>
+                </div>
+
+                <div class="code-block">
+                    <pre><code class="language-bash"># Compile to Rust
+cargo run example.lisp &gt; output.rs
+
+# Compile and run
+rustc output.rs -o program && ./program</code></pre>
+                </div>
+
+                <div class="output-block">
+                    <div class="output-header">Output</div>
+                    <pre><code>6
+20
+"greater"</code></pre>
+                </div>
+            </section>
+
+            <section id="language-reference" class="content-section">
+                <h2>Language Reference</h2>
+
+                <h3 id="data-types">Data Types</h3>
+                <div class="data-types-grid">
+                    <div class="data-type-card">
+                        <h4>Numbers</h4>
+                        <div class="code-block">
+                            <pre><code class="language-lisp">42      ; Integer
+3.14    ; Float  
+-10     ; Negative</code></pre>
+                        </div>
+                    </div>
+                    <div class="data-type-card">
+                        <h4>Strings</h4>
+                        <div class="code-block">
+                            <pre><code class="language-lisp">"hello world"
+"with\nnewlines"
+"escaped \"quotes\""</code></pre>
+                        </div>
+                    </div>
+                    <div class="data-type-card">
+                        <h4>Booleans & Nil</h4>
+                        <div class="code-block">
+                            <pre><code class="language-lisp">true
+false
+nil</code></pre>
+                        </div>
+                    </div>
+                    <div class="data-type-card">
+                        <h4>Symbols</h4>
+                        <div class="code-block">
+                            <pre><code class="language-lisp">x
+my-variable
++
+custom-func</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <h3 id="operations">Operations</h3>
+                
+                <h4>Arithmetic Operations</h4>
+                <div class="operation-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Operation</th>
+                                <th>Lisp Syntax</th>
+                                <th>Generated Rust</th>
+                                <th>Result</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Addition</td>
+                                <td><code>(+ 1 2 3)</code></td>
+                                <td><code>(1 + 2 + 3)</code></td>
+                                <td>6</td>
+                            </tr>
+                            <tr>
+                                <td>Subtraction</td>
+                                <td><code>(- 10 3)</code></td>
+                                <td><code>(10 - 3)</code></td>
+                                <td>7</td>
+                            </tr>
+                            <tr>
+                                <td>Multiplication</td>
+                                <td><code>(* 4 5 2)</code></td>
+                                <td><code>(4 * 5 * 2)</code></td>
+                                <td>40</td>
+                            </tr>
+                            <tr>
+                                <td>Division</td>
+                                <td><code>(/ 20 4)</code></td>
+                                <td><code>(20 / 4)</code></td>
+                                <td>5</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h4>Comparison Operations</h4>
+                <div class="operation-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Operation</th>
+                                <th>Lisp Syntax</th>
+                                <th>Generated Rust</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Equal</td>
+                                <td><code>(= 5 5)</code></td>
+                                <td><code>(5 == 5)</code></td>
+                            </tr>
+                            <tr>
+                                <td>Less Than</td>
+                                <td><code>(&lt; 3 7)</code></td>
+                                <td><code>(3 &lt; 7)</code></td>
+                            </tr>
+                            <tr>
+                                <td>Greater Than</td>
+                                <td><code>(&gt; 8 2)</code></td>
+                                <td><code>(8 &gt; 2)</code></td>
+                            </tr>
+                            <tr>
+                                <td>Less or Equal</td>
+                                <td><code>(&lt;= 4 4)</code></td>
+                                <td><code>(4 &lt;= 4)</code></td>
+                            </tr>
+                            <tr>
+                                <td>Greater or Equal</td>
+                                <td><code>(&gt;= 9 5)</code></td>
+                                <td><code>(9 &gt;= 5)</code></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3 id="control-flow">Control Flow</h3>
+                
+                <h4>Conditionals</h4>
+                <div class="example-block">
+                    <div class="example-header">
+                        <span class="example-title">If Expression</span>
+                    </div>
+                    <div class="code-block">
+                        <pre><code class="language-lisp">(if (&gt; x 0) 
+    "positive" 
+    "non-positive")</code></pre>
+                    </div>
+                    <div class="example-output">
+                        <strong>Compiles to:</strong>
+                        <pre><code class="language-rust">if x &gt; 0 { "positive" } else { "non-positive" }</code></pre>
+                    </div>
+                </div>
+
+                <h4>Variable Binding</h4>
+                <div class="example-block">
+                    <div class="example-header">
+                        <span class="example-title">Let Expression</span>
+                    </div>
+                    <div class="code-block">
+                        <pre><code class="language-lisp">(let ((x 10) (y 20)) 
+     (+ x y))</code></pre>
+                    </div>
+                    <div class="example-output">
+                        <strong>Compiles to:</strong>
+                        <pre><code class="language-rust">{ let x = 10; let y = 20; (x + y) }</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <section id="examples" class="content-section">
+                <h2>Examples</h2>
+                
+                <div class="example-grid">
+                    <div class="example-card">
+                        <h3>Mathematical Calculations</h3>
+                        <div class="code-block">
+                            <pre><code class="language-lisp">; Calculate area of triangle
+(let ((base 5) (height 10))
+     (* 0.5 base height))
+
+; Quadratic formula
+(let ((a 1) (b -5) (c 6))
+     (/ (+ (- b) (sqrt (- (* b b) (* 4 a c))))
+        (* 2 a)))</code></pre>
+                        </div>
+                    </div>
+                    
+                    <div class="example-card">
+                        <h3>Conditional Logic</h3>
+                        <div class="code-block">
+                            <pre><code class="language-lisp">; Grade assignment
+(if (&gt;= score 90) 
+    "A"
+    (if (&gt;= score 80)
+        "B" 
+        (if (&gt;= score 70)
+            "C"
+            "F")))
+
+; Min/max functions
+(if (&lt; a b) a b)  ; min
+(if (&gt; a b) a b)  ; max</code></pre>
+                        </div>
+                    </div>
+                    
+                    <div class="example-card">
+                        <h3>List Operations</h3>
+                        <div class="code-block">
+                            <pre><code class="language-lisp">; Create lists
+(list 1 2 3 4 5)
+(list "hello" "world")
+(list true false nil)
+
+; Nested lists  
+(list (list 1 2) (list 3 4))</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="api-reference" class="content-section">
+                <h2>API Reference</h2>
+
+                <h3 id="lexer">Lexer Module</h3>
+                <div class="api-section">
+                    <h4><code>tokenize(input: &str) -> Result&lt;Vec&lt;Token&gt;, String&gt;</code></h4>
+                    <p>Tokenizes the input string into a vector of tokens. Handles numbers, symbols, strings, parentheses, and comments.</p>
+                    
+                    <h5>Token Types</h5>
+                    <ul>
+                        <li><code>LeftParen</code> - Opening parenthesis <code>(</code></li>
+                        <li><code>RightParen</code> - Closing parenthesis <code>)</code></li>
+                        <li><code>Number(f64)</code> - Numeric literals</li>
+                        <li><code>Symbol(String)</code> - Variable and function names</li>
+                        <li><code>String(String)</code> - String literals</li>
+                        <li><code>Bool(bool)</code> - Boolean values</li>
+                        <li><code>Nil</code> - Nil value</li>
+                    </ul>
+                </div>
+
+                <h3 id="parser">Parser Module</h3>
+                <div class="api-section">
+                    <h4><code>parse(tokens: Vec&lt;Token&gt;) -> Result&lt;Vec&lt;LispExpr&gt;, String&gt;</code></h4>
+                    <p>Parses tokens into an Abstract Syntax Tree (AST) of Lisp expressions.</p>
+                    
+                    <h5>Expression Types</h5>
+                    <ul>
+                        <li><code>Number(f64)</code> - Numeric values</li>
+                        <li><code>Symbol(String)</code> - Identifiers</li>
+                        <li><code>String(String)</code> - String literals</li>
+                        <li><code>Bool(bool)</code> - Boolean values</li>
+                        <li><code>Nil</code> - Nil value</li>
+                        <li><code>List(Vec&lt;LispExpr&gt;)</code> - S-expressions</li>
+                    </ul>
+                </div>
+
+                <h3 id="compiler">Compiler Module</h3>
+                <div class="api-section">
+                    <h4><code>compile_to_rust(expressions: &[LispExpr]) -> Result&lt;String, String&gt;</code></h4>
+                    <p>Compiles Lisp expressions into Rust source code. The generated code is wrapped in a main function with print statements for each expression result.</p>
+                    
+                    <h5>Supported Operations</h5>
+                    <ul>
+                        <li>Arithmetic: <code>+</code>, <code>-</code>, <code>*</code>, <code>/</code></li>
+                        <li>Comparison: <code>=</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code></li>
+                        <li>Control flow: <code>if</code></li>
+                        <li>Variable binding: <code>let</code></li>
+                        <li>List creation: <code>list</code></li>
+                    </ul>
+                </div>
+            </section>
+        </main>
+
+        <footer class="content-footer">
+            <p>&copy; 2024 Lisp Compiler Documentation. Generated with custom documentation generator.</p>
+        </footer>
+    </div>
+</body>
+</html>
