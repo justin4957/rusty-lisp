@@ -64,11 +64,11 @@ pub enum LispExpr {
 ```
 
 ### Deliverables:
-- [ ] Extended AST with macro support
-- [ ] Macro definition parser (`defmacro`)
-- [ ] Quote/unquote/quasiquote syntax
-- [ ] Basic macro expansion engine
-- [ ] Hygienic macro system (gensym)
+- [x] Extended AST with macro support ✅ **COMPLETED** - [PR #feature/extend-ast-macro-support]
+- [ ] Macro definition parser (`defmacro`) 🚧 **IN PROGRESS** - [Issue #2](https://github.com/justin4957/rusty-lisp/issues/2)
+- [ ] Quote/unquote/quasiquote syntax 📋 **PLANNED** - [Issue #3](https://github.com/justin4957/rusty-lisp/issues/3)
+- [ ] Basic macro expansion engine 📋 **PLANNED** - [Issue #4](https://github.com/justin4957/rusty-lisp/issues/4)
+- [ ] Hygienic macro system (gensym) 📋 **PLANNED** - [Issue #5](https://github.com/justin4957/rusty-lisp/issues/5)
 
 ## 1.2 Macro Expansion Engine
 
@@ -88,10 +88,10 @@ impl MacroExpander {
 ```
 
 ### Deliverables:
-- [ ] Macro expansion phase in compilation pipeline
-- [ ] Pattern matching for macro parameters
-- [ ] Recursive expansion with depth limits
-- [ ] Error handling for macro expansion failures
+- [ ] Macro expansion phase in compilation pipeline 📋 **PLANNED** - [Issue #6](https://github.com/justin4957/rusty-lisp/issues/6)
+- [ ] Pattern matching for macro parameters 📋 **PLANNED** - [Issue #7](https://github.com/justin4957/rusty-lisp/issues/7)
+- [ ] Recursive expansion with depth limits 📋 **PLANNED** - [Issue #8](https://github.com/justin4957/rusty-lisp/issues/8)
+- [ ] Error handling for macro expansion failures 📋 **PLANNED** - [Issue #9](https://github.com/justin4957/rusty-lisp/issues/9)
 
 ---
 

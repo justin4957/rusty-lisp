@@ -22,11 +22,21 @@ The result is a unique language perfect for AI agents, rapid prototyping, and sy
 
 ## Features
 
+### Current Implementation
 - **Complete Lisp Parser** - Handles atoms, lists, strings, numbers, booleans
 - **Rust Code Generation** - Produces idiomatic Rust code
 - **Built-in Operations** - Arithmetic, comparisons, conditionals
+- **Variable Bindings** - `let` expressions with lexical scoping
 - **Error Handling** - Comprehensive parsing and compilation error messages
 - **Fast Compilation** - Direct compilation to native Rust code
+
+### Macro System (In Development)
+- **Extended AST** - Full macro infrastructure with Quote, Unquote, Quasiquote, and Splice support
+- **Macro Definitions** - Foundation for `defmacro` syntax (parser implementation in progress)
+- **Hygienic Macros** - Gensym support for variable capture prevention
+- **Code-as-Data** - Homoiconic design for AI agent manipulation
+
+> 📍 **Status**: Phase 1.1 (Core Macro Infrastructure) complete. See [GitHub Issues](https://github.com/justin4957/rusty-lisp/issues) for implementation progress.
 
 ## Quick Start
 
@@ -109,6 +119,23 @@ rustc output.rs -o program && ./program
      (+ x y))
 ```
 
+### Macro System (Planned)
+```lisp
+; Macro definitions (in development)
+(defmacro when (condition &rest body)
+  `(if ,condition (progn ,@body) nil))
+
+; Usage
+(when (> x 0)
+  (println "positive")
+  (+ x 1))
+
+; Quote family
+'(+ 1 2 3)              ; Quote
+`(+ ,x ,(* 2 3))        ; Quasiquote with unquote
+`(list ,@numbers)       ; Splice operation
+```
+
 ## Examples
 
 ### Basic Arithmetic
@@ -143,12 +170,24 @@ println!("{:?}", { let base = 5; let height = 10; (0.5 * base * height) });  // 
 
 ## Architecture
 
-The compiler follows a traditional compilation pipeline:
+The compiler follows a traditional compilation pipeline with macro system extensions:
 
-1. **Lexer** (`src/lexer.rs`) - Tokenizes source code
-2. **Parser** (`src/parser.rs`) - Builds Abstract Syntax Tree
-3. **Compiler** (`src/compiler.rs`) - Generates Rust code
-4. **CLI** (`src/main.rs`) - Command-line interface
+1. **AST** (`src/ast.rs`) - Core `LispExpr` enum supporting both basic Lisp types and macro constructs
+2. **Lexer** (`src/lexer.rs`) - Tokenizes source code
+3. **Parser** (`src/parser.rs`) - Builds Abstract Syntax Tree
+4. **Compiler** (`src/compiler.rs`) - Generates Rust code (macro expansion phase to be added)
+5. **CLI** (`src/main.rs`) - Command-line interface
+
+### AST Structure
+The `LispExpr` enum supports:
+- **Basic Types**: Numbers, Strings, Symbols, Lists, Booleans, Nil
+- **Macro System**: Macro definitions, macro calls, quote families (Quote, Quasiquote, Unquote, Splice)
+- **Hygiene**: Gensym for unique symbol generation
+
+### Future Pipeline
+```
+Source → Lexer → Parser → Macro Expander → Compiler → Rust Code
+```
 
 ## Testing
 
