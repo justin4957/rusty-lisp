@@ -31,12 +31,12 @@ The result is a unique language perfect for AI agents, rapid prototyping, and sy
 - **Fast Compilation** - Direct compilation to native Rust code
 
 ### Macro System (In Development)
-- **Extended AST** - Full macro infrastructure with Quote, Unquote, Quasiquote, and Splice support
-- **Macro Definitions** - Foundation for `defmacro` syntax (parser implementation in progress)
+- **Extended AST** - Full macro infrastructure with Quote, Unquote, Quasiquote, and Splice support ✅
+- **Macro Definitions** - `defmacro` syntax parsing with parameter lists and `&rest` support ✅
 - **Hygienic Macros** - Gensym support for variable capture prevention
 - **Code-as-Data** - Homoiconic design for AI agent manipulation
 
-> 📍 **Status**: Phase 1.1 (Core Macro Infrastructure) complete. See [GitHub Issues](https://github.com/justin4957/rusty-lisp/issues) for implementation progress.
+> 📍 **Status**: Phase 1.1 (Core Macro Infrastructure) - AST ✅ and Parser ✅ complete. See [GitHub Issues](https://github.com/justin4957/rusty-lisp/issues) for implementation progress.
 
 ## Quick Start
 
@@ -119,18 +119,20 @@ rustc output.rs -o program && ./program
      (+ x y))
 ```
 
-### Macro System (Planned)
+### Macro System (Parsing Available)
 ```lisp
-; Macro definitions (in development)
+; Macro definitions (parsing implemented)
 (defmacro when (condition &rest body)
   `(if ,condition (progn ,@body) nil))
 
-; Usage
-(when (> x 0)
-  (println "positive")
-  (+ x 1))
+; Multiple parameter types supported
+(defmacro unless (condition body)
+  (if (not condition) body nil))
 
-; Quote family
+; Note: Parser can handle defmacro syntax, but macro expansion
+; is not yet implemented. See Phase 1.2 in roadmap.
+
+; Quote family (AST support available)
 '(+ 1 2 3)              ; Quote
 `(+ ,x ,(* 2 3))        ; Quasiquote with unquote
 `(list ,@numbers)       ; Splice operation
