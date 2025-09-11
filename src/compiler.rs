@@ -46,6 +46,27 @@ impl RustCompiler {
                 }
             },
             LispExpr::List(elements) => self.compile_list(elements),
+            LispExpr::Macro { name, .. } => {
+                Err(format!("Macro definitions are not yet supported in code generation: {}", name))
+            },
+            LispExpr::MacroCall { name, .. } => {
+                Err(format!("Macro calls are not yet supported in code generation: {}", name))
+            },
+            LispExpr::Quote(_expr) => {
+                Err("Quote expressions are not yet supported in code generation".to_string())
+            },
+            LispExpr::Quasiquote(_expr) => {
+                Err("Quasiquote expressions are not yet supported in code generation".to_string())
+            },
+            LispExpr::Unquote(_expr) => {
+                Err("Unquote expressions are not yet supported in code generation".to_string())
+            },
+            LispExpr::Splice(_expr) => {
+                Err("Splice expressions are not yet supported in code generation".to_string())
+            },
+            LispExpr::Gensym(name) => {
+                Ok(format!("generated_symbol_{}", name))
+            },
         }
     }
     
