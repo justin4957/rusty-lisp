@@ -87,7 +87,7 @@
                     </div>
                     <div class="feature-card">
                         <h3>🔧 Macro System</h3>
-                        <p>Complete macro infrastructure: defmacro, quote family parsing</p>
+                        <p>Complete macro infrastructure: defmacro, quote family, and basic expansion engine</p>
                     </div>
                 </div>
             </section>
@@ -338,21 +338,27 @@ custom-func</code></pre>
                     </div>
                     
                     <div class="example-card">
-                        <h3>Macro Definitions (Parsing)</h3>
+                        <h3>Macro Definitions & Expansion</h3>
                         <div class="code-block">
-                            <pre><code class="language-lisp">; Basic macro definition
-(defmacro when (condition body)
-  (if condition body nil))
+                            <pre><code class="language-lisp">; Simple macro with automatic expansion
+(defmacro double (x)
+  `(* ,x 2))
 
-; Macro with &rest parameters
-(defmacro when (condition &rest body)
-  `(if ,condition (progn ,@body) nil))
+(double 5)  ; Expands to: (* 5 2)
 
-; Complex macro bodies
-(defmacro unless (test &rest body)
-  `(if (not ,test) (progn ,@body)))</code></pre>
+; Nested macro expansion
+(defmacro quadruple (x)
+  `(double (double ,x)))
+
+(quadruple 3)  ; Expands to: (* (* 3 2) 2)
+
+; Macro with multiple parameters
+(defmacro add-and-multiply (a b c)
+  `(* (+ ,a ,b) ,c))
+
+(add-and-multiply 1 2 3)  ; Expands to: (* (+ 1 2) 3)</code></pre>
                         </div>
-                        <p><em>Note: Parsing fully implemented, expansion in development</em></p>
+                        <p><em>Basic macro expansion engine with parameter substitution and recursive expansion</em></p>
                     </div>
 
                     <div class="example-card">
@@ -422,11 +428,27 @@ custom-func</code></pre>
                     </ul>
                 </div>
 
+                <h3 id="macro-expander">Macro Expander Module</h3>
+                <div class="api-section">
+                    <h4><code>MacroExpander::new() -> MacroExpander</code></h4>
+                    <p>Creates a new macro expander with default settings (max depth: 100).</p>
+
+                    <h4><code>expand_all(expr: LispExpr) -> Result&lt;LispExpr, MacroError&gt;</code></h4>
+                    <p>Expands all macro calls in an expression recursively. Handles:</p>
+                    <ul>
+                        <li>Macro definition registration</li>
+                        <li>Parameter pattern matching and substitution</li>
+                        <li>Recursive expansion for nested macros</li>
+                        <li>Quasiquote/unquote/splice operations</li>
+                        <li>Infinite recursion prevention via depth limits</li>
+                    </ul>
+                </div>
+
                 <h3 id="compiler">Compiler Module</h3>
                 <div class="api-section">
                     <h4><code>compile_to_rust(expressions: &[LispExpr]) -> Result&lt;String, String&gt;</code></h4>
-                    <p>Compiles Lisp expressions into Rust source code. The generated code is wrapped in a main function with print statements for each expression result.</p>
-                    
+                    <p>Compiles Lisp expressions into Rust source code. Macros are automatically expanded before code generation. The generated code is wrapped in a main function with print statements for each expression result.</p>
+
                     <h5>Supported Operations</h5>
                     <ul>
                         <li>Arithmetic: <code>+</code>, <code>-</code>, <code>*</code>, <code>/</code></li>

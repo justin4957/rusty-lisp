@@ -34,10 +34,11 @@ The result is a unique language perfect for AI agents, rapid prototyping, and sy
 - **Extended AST** - Full macro infrastructure with Quote, Unquote, Quasiquote, and Splice support ✅
 - **Macro Definitions** - `defmacro` syntax parsing with parameter lists and `&rest` support ✅
 - **Quote Family** - Complete quote/unquote/quasiquote/splice parsing (shorthand & longhand) ✅
+- **Macro Expansion** - Basic macro expansion engine with parameter substitution and recursive expansion ✅
 - **Hygienic Macros** - Gensym support for variable capture prevention
 - **Code-as-Data** - Homoiconic design for AI agent manipulation
 
-> 📍 **Status**: Phase 1.1 (Core Macro Infrastructure) - AST ✅, Parser ✅, and Quote Syntax ✅ complete. See [GitHub Issues](https://github.com/justin4957/rusty-lisp/issues) for implementation progress.
+> 📍 **Status**: Phase 1.1 (Core Macro Infrastructure) - AST ✅, Parser ✅, Quote Syntax ✅, and Basic Macro Expansion ✅ complete. See [GitHub Issues](https://github.com/justin4957/rusty-lisp/issues) for implementation progress.
 
 ## Quick Start
 
@@ -120,15 +121,24 @@ rustc output.rs -o program && ./program
      (+ x y))
 ```
 
-### Macro System (Parsing Implemented)
+### Macro System
 ```lisp
-; Macro definitions (parsing implemented)
+; Macro definitions with automatic expansion
 (defmacro when (condition &rest body)
   `(if ,condition (progn ,@body) nil))
 
-; Multiple parameter types supported
-(defmacro unless (condition body)
-  (if (not condition) body nil))
+; Simple macro with parameters
+(defmacro double (x)
+  `(* ,x 2))
+
+; Macro call - automatically expanded during compilation
+(double 5)  ; Expands to: (* 5 2)
+
+; Nested macro expansion
+(defmacro quadruple (x)
+  `(double (double ,x)))
+
+(quadruple 3)  ; Expands to: (* (* 3 2) 2)
 
 ; Quote family - Both shorthand and longhand forms supported
 '(+ 1 2 3)                    ; Quote shorthand
@@ -137,10 +147,8 @@ rustc output.rs -o program && ./program
 `(+ ,x ,(* 2 3))             ; Quasiquote with unquote shorthand
 (quasiquote (+ (unquote x) (unquote (* 2 3))))  ; Longhand
 
-`(list ,@numbers)            ; Splice shorthand  
+`(list ,@numbers)            ; Splice shorthand
 (quasiquote (list (unquote-splicing numbers)))  ; Splice longhand
-
-; Note: Full parsing implemented. Macro expansion coming in Phase 1.2
 ```
 
 ## Examples
@@ -182,8 +190,9 @@ The compiler follows a traditional compilation pipeline with macro system extens
 1. **AST** (`src/ast.rs`) - Core `LispExpr` enum supporting both basic Lisp types and macro constructs
 2. **Lexer** (`src/lexer.rs`) - Tokenizes source code
 3. **Parser** (`src/parser.rs`) - Builds Abstract Syntax Tree
-4. **Compiler** (`src/compiler.rs`) - Generates Rust code (macro expansion phase to be added)
-5. **CLI** (`src/main.rs`) - Command-line interface
+4. **Macro Expander** (`src/macro_expander.rs`) - Expands macro calls with parameter substitution
+5. **Compiler** (`src/compiler.rs`) - Generates Rust code from expanded AST
+6. **CLI** (`src/main.rs`) - Command-line interface
 
 ### AST Structure
 The `LispExpr` enum supports:
@@ -191,10 +200,16 @@ The `LispExpr` enum supports:
 - **Macro System**: Macro definitions, macro calls, quote families (Quote, Quasiquote, Unquote, Splice)
 - **Hygiene**: Gensym for unique symbol generation
 
-### Future Pipeline
+### Current Pipeline
 ```
 Source → Lexer → Parser → Macro Expander → Compiler → Rust Code
 ```
+
+The macro expander:
+- Registers macro definitions from `defmacro` forms
+- Expands macro calls by pattern matching parameters
+- Performs recursive expansion for nested macros
+- Prevents infinite recursion with configurable depth limits
 
 ## Testing
 
