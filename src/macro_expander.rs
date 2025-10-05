@@ -6,6 +6,7 @@ pub struct MacroExpander {
     macros: HashMap<String, MacroDefinition>,
     expansion_depth: usize,
     max_depth: usize,
+    gensym_counter: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -44,6 +45,7 @@ impl MacroExpander {
             macros: HashMap::new(),
             expansion_depth: 0,
             max_depth: 100, // Prevent infinite recursion
+            gensym_counter: 0,
         }
     }
 
@@ -52,7 +54,19 @@ impl MacroExpander {
             macros: HashMap::new(),
             expansion_depth: 0,
             max_depth,
+            gensym_counter: 0,
         }
+    }
+
+    /// Generate a unique symbol for hygienic macros
+    pub fn gensym(&mut self, prefix: &str) -> String {
+        self.gensym_counter += 1;
+        format!("{}#g{}", prefix, self.gensym_counter)
+    }
+
+    /// Generate a gensym expression
+    pub fn gen_gensym_expr(&mut self, prefix: &str) -> LispExpr {
+        LispExpr::Gensym(self.gensym(prefix))
     }
 
     /// Register a macro definition
@@ -162,17 +176,184 @@ impl MacroExpander {
             });
         }
 
+        // Apply hygiene: collect symbols introduced by the macro (not parameters)
+        let introduced_symbols = self.collect_introduced_symbols(&macro_def.body, &macro_def.parameters);
+
+        // Create hygiene renaming map for introduced symbols
+        let mut hygiene_map = HashMap::new();
+        for symbol in introduced_symbols {
+            let renamed = self.gensym(&symbol);
+            hygiene_map.insert(symbol, renamed);
+        }
+
+        // Apply hygiene renaming to macro body first
+        let hygienic_body = self.apply_hygiene_renaming(&macro_def.body, &hygiene_map);
+
         // Create parameter bindings
         let mut bindings = HashMap::new();
         for (param, arg) in macro_def.parameters.iter().zip(args.iter()) {
             bindings.insert(param.clone(), arg.clone());
         }
 
-        // Substitute parameters in the macro body
-        let substituted_body = self.substitute_parameters(&macro_def.body, &bindings)?;
+        // Substitute parameters in the hygienic macro body
+        let substituted_body = self.substitute_parameters(&hygienic_body, &bindings)?;
 
         // Recursively expand the result in case it contains more macro calls
         self.expand_expression(substituted_body)
+    }
+
+    /// Collect symbols introduced by the macro (excluding parameters)
+    fn collect_introduced_symbols(&self, expr: &LispExpr, parameters: &[String]) -> Vec<String> {
+        let mut symbols = Vec::new();
+
+        // For quasiquoted bodies, we need to collect symbols that are NOT inside unquotes
+        self.collect_non_parameter_symbols(expr, &mut symbols, parameters);
+
+        // Built-in forms that should not be renamed
+        const BUILTIN_FORMS: &[&str] = &[
+            "let", "if", "define", "lambda", "quote", "quasiquote", "unquote", "unquote-splicing",
+            "+", "-", "*", "/", "=", "<", ">", "<=", ">=",
+            "and", "or", "not", "list", "car", "cdr", "cons",
+            "set!", "begin", "progn",
+        ];
+
+        // Filter out built-in forms
+        symbols.retain(|s| !BUILTIN_FORMS.contains(&s.as_str()));
+
+        // Filter out macro names - they should be resolved, not renamed
+        symbols.retain(|s| !self.macros.contains_key(s));
+
+        // Remove duplicates
+        symbols.sort();
+        symbols.dedup();
+
+        symbols
+    }
+
+    fn collect_non_parameter_symbols(&self, expr: &LispExpr, symbols: &mut Vec<String>, parameters: &[String]) {
+        match expr {
+            LispExpr::Symbol(name) => {
+                // Only collect if not a parameter
+                if !parameters.contains(name) {
+                    symbols.push(name.clone());
+                }
+            }
+            LispExpr::List(elements) => {
+                for element in elements {
+                    self.collect_non_parameter_symbols(element, symbols, parameters);
+                }
+            }
+            LispExpr::Quote(_) => {
+                // Don't collect symbols inside quotes
+            }
+            LispExpr::Quasiquote(inner) => {
+                // In quasiquote, collect symbols that are NOT inside unquotes
+                self.collect_symbols_in_quasiquote(inner, symbols, parameters);
+            }
+            LispExpr::Unquote(_) | LispExpr::Splice(_) => {
+                // Don't collect from unquoted parts - these are parameters
+            }
+            LispExpr::Macro { body, .. } => {
+                self.collect_non_parameter_symbols(body, symbols, parameters);
+            }
+            _ => {}
+        }
+    }
+
+    fn collect_symbols_in_quasiquote(&self, expr: &LispExpr, symbols: &mut Vec<String>, parameters: &[String]) {
+        match expr {
+            LispExpr::Unquote(_) | LispExpr::Splice(_) => {
+                // Skip unquoted parts - these contain parameters
+            }
+            LispExpr::Symbol(name) => {
+                // Collect symbols in the quasiquoted part (not unquoted)
+                if !parameters.contains(name) {
+                    symbols.push(name.clone());
+                }
+            }
+            LispExpr::List(elements) => {
+                for element in elements {
+                    self.collect_symbols_in_quasiquote(element, symbols, parameters);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Apply hygiene renaming to symbols
+    fn apply_hygiene_renaming(&self, expr: &LispExpr, hygiene_map: &HashMap<String, String>) -> LispExpr {
+        match expr {
+            LispExpr::Symbol(name) => {
+                if let Some(renamed) = hygiene_map.get(name) {
+                    LispExpr::Gensym(renamed.clone())
+                } else {
+                    expr.clone()
+                }
+            }
+            LispExpr::List(elements) => {
+                LispExpr::List(
+                    elements.iter()
+                        .map(|e| self.apply_hygiene_renaming(e, hygiene_map))
+                        .collect()
+                )
+            }
+            LispExpr::Quote(inner) => {
+                // Don't rename inside quotes
+                LispExpr::Quote(inner.clone())
+            }
+            LispExpr::Quasiquote(inner) => {
+                LispExpr::Quasiquote(Box::new(
+                    self.apply_hygiene_renaming_in_quasiquote(inner, hygiene_map)
+                ))
+            }
+            LispExpr::Unquote(inner) => {
+                LispExpr::Unquote(Box::new(
+                    self.apply_hygiene_renaming(inner, hygiene_map)
+                ))
+            }
+            LispExpr::Splice(inner) => {
+                LispExpr::Splice(Box::new(
+                    self.apply_hygiene_renaming(inner, hygiene_map)
+                ))
+            }
+            LispExpr::Macro { name, parameters, body } => {
+                LispExpr::Macro {
+                    name: name.clone(),
+                    parameters: parameters.clone(),
+                    body: Box::new(self.apply_hygiene_renaming(body, hygiene_map)),
+                }
+            }
+            _ => expr.clone(),
+        }
+    }
+
+    fn apply_hygiene_renaming_in_quasiquote(&self, expr: &LispExpr, hygiene_map: &HashMap<String, String>) -> LispExpr {
+        match expr {
+            LispExpr::Unquote(inner) => {
+                // Don't rename inside unquotes - those are parameters
+                LispExpr::Unquote(inner.clone())
+            }
+            LispExpr::Splice(inner) => {
+                // Don't rename inside splices - those are parameters
+                LispExpr::Splice(inner.clone())
+            }
+            LispExpr::Symbol(name) => {
+                // Rename symbols in the quasiquoted part
+                if let Some(renamed) = hygiene_map.get(name) {
+                    LispExpr::Gensym(renamed.clone())
+                } else {
+                    expr.clone()
+                }
+            }
+            LispExpr::List(elements) => {
+                LispExpr::List(
+                    elements.iter()
+                        .map(|e| self.apply_hygiene_renaming_in_quasiquote(e, hygiene_map))
+                        .collect()
+                )
+            }
+            _ => expr.clone(),
+        }
     }
 
     fn expand_quasiquote(&mut self, expr: LispExpr) -> Result<LispExpr, MacroError> {
@@ -492,7 +673,7 @@ mod tests {
     #[test]
     fn test_max_depth_exceeded() {
         let mut expander = MacroExpander::with_max_depth(2);
-        
+
         // Define a recursive macro (infinite loop)
         // This should expand to a list that calls itself
         let macro_body = LispExpr::Quasiquote(Box::new(
@@ -501,26 +682,307 @@ mod tests {
                 LispExpr::Unquote(Box::new(LispExpr::Symbol("x".to_string()))),
             ])
         ));
-        
+
         expander.define_macro(
             "recursive_macro".to_string(),
             vec!["x".to_string()],
             macro_body,
         );
-        
+
         // Use a List instead of MacroCall since that's what our parser produces
         let macro_call = LispExpr::List(vec![
             LispExpr::Symbol("recursive_macro".to_string()),
             LispExpr::Number(1.0),
         ]);
-        
+
         let result = expander.expand_all(macro_call);
         assert!(result.is_err());
-        
+
         if let Err(MacroError::MaxDepthExceeded(depth)) = result {
             assert_eq!(depth, 2);
         } else {
             panic!("Expected MaxDepthExceeded error, got: {:?}", result);
+        }
+    }
+
+    // Hygiene tests
+
+    #[test]
+    fn test_gensym_generation() {
+        let mut expander = MacroExpander::new();
+
+        let sym1 = expander.gensym("temp");
+        let sym2 = expander.gensym("temp");
+        let sym3 = expander.gensym("var");
+
+        // Each gensym should be unique
+        assert_ne!(sym1, sym2);
+        assert_ne!(sym2, sym3);
+        assert_ne!(sym1, sym3);
+
+        // Should contain the prefix
+        assert!(sym1.starts_with("temp"));
+        assert!(sym2.starts_with("temp"));
+        assert!(sym3.starts_with("var"));
+    }
+
+    #[test]
+    fn test_hygiene_prevents_variable_capture() {
+        let mut expander = MacroExpander::new();
+
+        // Define a macro that introduces a temporary variable 'temp'
+        // (defmacro swap (a b) `(let ((temp ,a)) (set! ,a ,b) (set! ,b temp)))
+        let macro_body = LispExpr::Quasiquote(Box::new(
+            LispExpr::List(vec![
+                LispExpr::Symbol("let".to_string()),
+                LispExpr::List(vec![
+                    LispExpr::List(vec![
+                        LispExpr::Symbol("temp".to_string()),
+                        LispExpr::Unquote(Box::new(LispExpr::Symbol("a".to_string()))),
+                    ]),
+                ]),
+                LispExpr::List(vec![
+                    LispExpr::Symbol("set!".to_string()),
+                    LispExpr::Unquote(Box::new(LispExpr::Symbol("a".to_string()))),
+                    LispExpr::Unquote(Box::new(LispExpr::Symbol("b".to_string()))),
+                ]),
+                LispExpr::List(vec![
+                    LispExpr::Symbol("set!".to_string()),
+                    LispExpr::Unquote(Box::new(LispExpr::Symbol("b".to_string()))),
+                    LispExpr::Symbol("temp".to_string()),
+                ]),
+            ])
+        ));
+
+        expander.define_macro(
+            "swap".to_string(),
+            vec!["a".to_string(), "b".to_string()],
+            macro_body,
+        );
+
+        // Call the macro with arguments
+        let macro_call = LispExpr::List(vec![
+            LispExpr::Symbol("swap".to_string()),
+            LispExpr::Symbol("x".to_string()),
+            LispExpr::Symbol("y".to_string()),
+        ]);
+
+        let result = expander.expand_all(macro_call).unwrap();
+
+        // The expanded code should use a gensym for 'temp'
+        // Check that the result contains a Gensym variant
+        fn contains_gensym(expr: &LispExpr) -> bool {
+            match expr {
+                LispExpr::Gensym(_) => true,
+                LispExpr::List(elements) => elements.iter().any(contains_gensym),
+                LispExpr::Quote(inner) |
+                LispExpr::Quasiquote(inner) |
+                LispExpr::Unquote(inner) |
+                LispExpr::Splice(inner) => contains_gensym(inner),
+                _ => false,
+            }
+        }
+
+        assert!(contains_gensym(&result),
+            "Hygienic macro should rename introduced variables to gensyms");
+    }
+
+    #[test]
+    fn test_hygiene_preserves_parameters() {
+        let mut expander = MacroExpander::new();
+
+        // Define a macro: (defmacro use-param (x) `(+ ,x ,x))
+        // The parameter 'x' should NOT be renamed
+        let macro_body = LispExpr::Quasiquote(Box::new(
+            LispExpr::List(vec![
+                LispExpr::Symbol("+".to_string()),
+                LispExpr::Unquote(Box::new(LispExpr::Symbol("x".to_string()))),
+                LispExpr::Unquote(Box::new(LispExpr::Symbol("x".to_string()))),
+            ])
+        ));
+
+        expander.define_macro(
+            "use-param".to_string(),
+            vec!["x".to_string()],
+            macro_body,
+        );
+
+        // Call with a value
+        let macro_call = LispExpr::List(vec![
+            LispExpr::Symbol("use-param".to_string()),
+            LispExpr::Number(5.0),
+        ]);
+
+        let result = expander.expand_all(macro_call).unwrap();
+
+        // Should expand to: (+ 5 5)
+        let expected = LispExpr::List(vec![
+            LispExpr::Symbol("+".to_string()),
+            LispExpr::Number(5.0),
+            LispExpr::Number(5.0),
+        ]);
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_hygiene_with_let_bindings() {
+        let mut expander = MacroExpander::new();
+
+        // Macro that introduces a let binding
+        // (defmacro with-temp (x) `(let ((result ,x)) result))
+        let macro_body = LispExpr::Quasiquote(Box::new(
+            LispExpr::List(vec![
+                LispExpr::Symbol("let".to_string()),
+                LispExpr::List(vec![
+                    LispExpr::List(vec![
+                        LispExpr::Symbol("result".to_string()),
+                        LispExpr::Unquote(Box::new(LispExpr::Symbol("x".to_string()))),
+                    ]),
+                ]),
+                LispExpr::Symbol("result".to_string()),
+            ])
+        ));
+
+        expander.define_macro(
+            "with-temp".to_string(),
+            vec!["x".to_string()],
+            macro_body,
+        );
+
+        let macro_call = LispExpr::List(vec![
+            LispExpr::Symbol("with-temp".to_string()),
+            LispExpr::Number(42.0),
+        ]);
+
+        let result = expander.expand_all(macro_call).unwrap();
+
+        // The introduced variable 'result' should be renamed to a gensym
+        fn check_let_has_gensym(expr: &LispExpr) -> bool {
+            match expr {
+                LispExpr::List(elements) => {
+                    if let Some(LispExpr::Symbol(first)) = elements.first() {
+                        if first == "let" && elements.len() >= 3 {
+                            // Check if bindings contain gensym
+                            if let LispExpr::List(bindings) = &elements[1] {
+                                for binding in bindings {
+                                    if let LispExpr::List(pair) = binding {
+                                        if matches!(pair.first(), Some(LispExpr::Gensym(_))) {
+                                            return true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    elements.iter().any(check_let_has_gensym)
+                }
+                _ => false,
+            }
+        }
+
+        assert!(check_let_has_gensym(&result),
+            "Let-bound variables introduced by macros should be renamed to gensyms");
+    }
+
+    #[test]
+    fn test_nested_macros_maintain_hygiene() {
+        let mut expander = MacroExpander::new();
+
+        // First macro introduces a variable
+        expander.define_macro(
+            "with-x".to_string(),
+            vec!["val".to_string()],
+            LispExpr::Quasiquote(Box::new(
+                LispExpr::List(vec![
+                    LispExpr::Symbol("let".to_string()),
+                    LispExpr::List(vec![
+                        LispExpr::List(vec![
+                            LispExpr::Symbol("x".to_string()),
+                            LispExpr::Unquote(Box::new(LispExpr::Symbol("val".to_string()))),
+                        ]),
+                    ]),
+                    LispExpr::Symbol("x".to_string()),
+                ])
+            )),
+        );
+
+        // Second macro also introduces a variable
+        expander.define_macro(
+            "with-y".to_string(),
+            vec!["val".to_string()],
+            LispExpr::Quasiquote(Box::new(
+                LispExpr::List(vec![
+                    LispExpr::Symbol("let".to_string()),
+                    LispExpr::List(vec![
+                        LispExpr::List(vec![
+                            LispExpr::Symbol("y".to_string()),
+                            LispExpr::Unquote(Box::new(LispExpr::Symbol("val".to_string()))),
+                        ]),
+                    ]),
+                    LispExpr::Symbol("y".to_string()),
+                ])
+            )),
+        );
+
+        // Nested macro call
+        let macro_call = LispExpr::List(vec![
+            LispExpr::Symbol("with-x".to_string()),
+            LispExpr::List(vec![
+                LispExpr::Symbol("with-y".to_string()),
+                LispExpr::Number(10.0),
+            ]),
+        ]);
+
+        let result = expander.expand_all(macro_call).unwrap();
+
+        // Both introduced variables should be renamed
+        fn count_gensyms(expr: &LispExpr) -> usize {
+            match expr {
+                LispExpr::Gensym(_) => 1,
+                LispExpr::List(elements) => elements.iter().map(count_gensyms).sum(),
+                LispExpr::Quote(inner) |
+                LispExpr::Quasiquote(inner) |
+                LispExpr::Unquote(inner) |
+                LispExpr::Splice(inner) => count_gensyms(inner),
+                _ => 0,
+            }
+        }
+
+        let gensym_count = count_gensyms(&result);
+        assert!(gensym_count >= 2,
+            "Nested macros should each introduce at least one gensym, found: {}", gensym_count);
+    }
+
+    #[test]
+    fn test_hygiene_does_not_rename_quoted_symbols() {
+        let mut expander = MacroExpander::new();
+
+        // Macro with quoted symbol that should not be renamed
+        // (defmacro get-quoted (x) `'symbol)
+        let macro_body = LispExpr::Quasiquote(Box::new(
+            LispExpr::Quote(Box::new(LispExpr::Symbol("symbol".to_string())))
+        ));
+
+        expander.define_macro(
+            "get-quoted".to_string(),
+            vec!["x".to_string()],
+            macro_body,
+        );
+
+        let macro_call = LispExpr::List(vec![
+            LispExpr::Symbol("get-quoted".to_string()),
+            LispExpr::Number(1.0),
+        ]);
+
+        let result = expander.expand_all(macro_call).unwrap();
+
+        // Should expand to: 'symbol (not renamed)
+        if let LispExpr::Quote(inner) = result {
+            assert!(matches!(*inner, LispExpr::Symbol(_)),
+                "Quoted symbols should not be renamed to gensyms");
+        } else {
+            panic!("Expected Quote expression");
         }
     }
 }
