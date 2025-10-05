@@ -42,7 +42,7 @@ impl RustCompiler {
                 match s.as_str() {
                     "pi" => Ok("std::f64::consts::PI".to_string()),
                     "e" => Ok("std::f64::consts::E".to_string()),
-                    _ => Err(format!("Unknown symbol: {}", s))
+                    _ => Ok(s.clone()) // Allow symbols as variable names
                 }
             },
             LispExpr::List(elements) => self.compile_list(elements),
@@ -65,7 +65,9 @@ impl RustCompiler {
                 Err("Splice expressions are not yet supported in code generation".to_string())
             },
             LispExpr::Gensym(name) => {
-                Ok(format!("generated_symbol_{}", name))
+                // Gensym symbols are hygienic generated symbols
+                // Use valid Rust identifier format
+                Ok(name.replace('#', "_"))
             },
         }
     }
