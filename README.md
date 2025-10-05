@@ -30,15 +30,16 @@ The result is a unique language perfect for AI agents, rapid prototyping, and sy
 - **Error Handling** - Comprehensive parsing and compilation error messages
 - **Fast Compilation** - Direct compilation to native Rust code
 
-### Macro System (In Development)
+### Macro System
 - **Extended AST** - Full macro infrastructure with Quote, Unquote, Quasiquote, and Splice support ✅
 - **Macro Definitions** - `defmacro` syntax parsing with parameter lists and `&rest` support ✅
 - **Quote Family** - Complete quote/unquote/quasiquote/splice parsing (shorthand & longhand) ✅
 - **Macro Expansion** - Basic macro expansion engine with parameter substitution and recursive expansion ✅
 - **Hygienic Macros** - Automatic gensym-based hygiene prevents variable capture ✅
+- **Pipeline Integration** - Macro expansion phase integrated into compilation pipeline ✅
 - **Code-as-Data** - Homoiconic design for AI agent manipulation
 
-> 📍 **Status**: Phase 1.1 (Core Macro Infrastructure) - AST ✅, Parser ✅, Quote Syntax ✅, Basic Macro Expansion ✅, and Hygienic Macros ✅ complete. See [GitHub Issues](https://github.com/justin4957/rusty-lisp/issues) for implementation progress.
+> 📍 **Status**: Phase 1.2 (Macro Expansion Engine) - Pipeline integration ✅ complete. The compiler now supports full macro expansion between parsing and code generation. See [GitHub Issues](https://github.com/justin4957/rusty-lisp/issues) for implementation progress.
 
 ## Quick Start
 
@@ -205,11 +206,20 @@ The `LispExpr` enum supports:
 Source → Lexer → Parser → Macro Expander → Compiler → Rust Code
 ```
 
-The macro expander:
-- Registers macro definitions from `defmacro` forms
-- Expands macro calls by pattern matching parameters
-- Performs recursive expansion for nested macros
-- Prevents infinite recursion with configurable depth limits
+The macro expansion phase:
+- **Registration**: Captures macro definitions from `defmacro` forms
+- **Pattern Matching**: Binds macro parameters to arguments
+- **Substitution**: Replaces parameters in macro body with actual arguments
+- **Recursive Expansion**: Handles nested macro calls automatically
+- **Hygiene**: Applies gensym-based renaming to prevent variable capture
+- **Depth Limiting**: Prevents infinite recursion with configurable max depth (default: 100)
+- **Error Handling**: Provides clear error messages for parameter mismatches and undefined macros
+
+The integration ensures:
+- Macro definitions are removed from the final output (return `Nil`)
+- All macro calls are fully expanded before code generation
+- Both basic and nested macros work seamlessly
+- Regular code passes through unchanged
 
 ## Testing
 
