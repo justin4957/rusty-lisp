@@ -87,7 +87,7 @@
                     </div>
                     <div class="feature-card">
                         <h3>🔧 Macro System</h3>
-                        <p>Complete macro infrastructure: defmacro, quote family, expansion engine, and automatic hygiene</p>
+                        <p>Complete macro infrastructure: defmacro, quote family, pipeline-integrated expansion engine, and automatic hygiene</p>
                     </div>
                 </div>
             </section>
@@ -358,7 +358,7 @@ custom-func</code></pre>
 
 (add-and-multiply 1 2 3)  ; Expands to: (* (+ 1 2) 3)</code></pre>
                         </div>
-                        <p><em>Basic macro expansion engine with parameter substitution and recursive expansion</em></p>
+                        <p><em>Macro expansion engine fully integrated into compilation pipeline with parameter substitution, recursive expansion, and automatic hygiene</em></p>
                     </div>
 
                     <div class="example-card">
@@ -434,10 +434,12 @@ custom-func</code></pre>
                     <p>Creates a new macro expander with default settings (max depth: 100).</p>
 
                     <h4><code>expand_all(expr: LispExpr) -> Result&lt;LispExpr, MacroError&gt;</code></h4>
-                    <p>Expands all macro calls in an expression recursively. Handles:</p>
+                    <p>Expands all macro calls in an expression recursively. The expansion phase is integrated into the compilation pipeline between parsing and code generation. Handles:</p>
                     <ul>
                         <li>Macro definition registration</li>
                         <li>Parameter pattern matching and substitution</li>
+                        <li>Automatic gensym-based hygiene to prevent variable capture</li>
+                        <li>Depth limiting to prevent infinite recursion (configurable, default: 100)</li>
                         <li>Recursive expansion for nested macros</li>
                         <li>Quasiquote/unquote/splice operations</li>
                         <li>Automatic hygienic renaming via gensym</li>
