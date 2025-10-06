@@ -87,7 +87,7 @@
                     </div>
                     <div class="feature-card">
                         <h3>🔧 Macro System</h3>
-                        <p>Complete macro infrastructure: defmacro, quote family, pipeline-integrated expansion engine, and automatic hygiene</p>
+                        <p>Complete macro infrastructure: defmacro with &rest parameters, quote family, pipeline-integrated expansion engine, and automatic hygiene</p>
                     </div>
                 </div>
             </section>
@@ -362,6 +362,27 @@ custom-func</code></pre>
                     </div>
 
                     <div class="example-card">
+                        <h3>Pattern Matching with &rest Parameters</h3>
+                        <div class="code-block">
+                            <pre><code class="language-lisp">; Variadic macros with &rest
+(defmacro add-all (first &rest rest)
+  `(+ ,first ,@rest))
+
+(add-all 1 2 3 4 5)  ; Expands to: (+ 1 2 3 4 5)
+
+; Classic when macro with multiple body expressions
+(defmacro when (condition &rest body)
+  `(if ,condition (progn ,@body) nil))
+
+(when (> x 5)
+  (print "big")
+  (+ x 1))
+; Expands to: (if (> x 5) (progn (print "big") (+ x 1)) nil)</code></pre>
+                        </div>
+                        <p><em>Advanced parameter patterns support variable-length argument lists with &rest</em></p>
+                    </div>
+
+                    <div class="example-card">
                         <h3>Quote Family Syntax</h3>
                         <div class="code-block">
                             <pre><code class="language-lisp">; Quote (data as literal)
@@ -437,13 +458,19 @@ custom-func</code></pre>
                     <p>Expands all macro calls in an expression recursively. The expansion phase is integrated into the compilation pipeline between parsing and code generation. Handles:</p>
                     <ul>
                         <li>Macro definition registration</li>
-                        <li>Parameter pattern matching and substitution</li>
+                        <li>Advanced parameter pattern matching:
+                            <ul>
+                                <li>Simple parameters: <code>(defmacro double (x) ...)</code></li>
+                                <li>&rest parameters: <code>(defmacro add-all (first &rest rest) ...)</code></li>
+                                <li>Multiple required + rest: <code>(defmacro foo (a b &rest others) ...)</code></li>
+                            </ul>
+                        </li>
+                        <li>Parameter substitution with splice support (<code>,@rest</code>)</li>
                         <li>Automatic gensym-based hygiene to prevent variable capture</li>
                         <li>Depth limiting to prevent infinite recursion (configurable, default: 100)</li>
                         <li>Recursive expansion for nested macros</li>
                         <li>Quasiquote/unquote/splice operations</li>
-                        <li>Automatic hygienic renaming via gensym</li>
-                        <li>Variable capture prevention</li>
+                        <li>Validation and clear error messages for pattern mismatches</li>
                         <li>Infinite recursion prevention via depth limits</li>
                     </ul>
                 </div>

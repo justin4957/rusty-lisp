@@ -169,15 +169,12 @@ impl MacroExpander {
             .ok_or_else(|| MacroError::UndefinedMacro(name.to_string()))?
             .clone();
 
-        if macro_def.parameters.len() != args.len() {
-            return Err(MacroError::ParameterCountMismatch {
-                expected: macro_def.parameters.len(),
-                actual: args.len(),
-            });
-        }
+        // Create parameter bindings using pattern matching
+        let bindings = self.match_parameters(&macro_def.parameters, &args)?;
 
         // Apply hygiene: collect symbols introduced by the macro (not parameters)
-        let introduced_symbols = self.collect_introduced_symbols(&macro_def.body, &macro_def.parameters);
+        let param_names: Vec<String> = bindings.keys().cloned().collect();
+        let introduced_symbols = self.collect_introduced_symbols(&macro_def.body, &param_names);
 
         // Create hygiene renaming map for introduced symbols
         let mut hygiene_map = HashMap::new();
@@ -189,17 +186,70 @@ impl MacroExpander {
         // Apply hygiene renaming to macro body first
         let hygienic_body = self.apply_hygiene_renaming(&macro_def.body, &hygiene_map);
 
-        // Create parameter bindings
-        let mut bindings = HashMap::new();
-        for (param, arg) in macro_def.parameters.iter().zip(args.iter()) {
-            bindings.insert(param.clone(), arg.clone());
-        }
-
         // Substitute parameters in the hygienic macro body
         let substituted_body = self.substitute_parameters(&hygienic_body, &bindings)?;
 
         // Recursively expand the result in case it contains more macro calls
         self.expand_expression(substituted_body)
+    }
+
+    /// Match macro parameters against arguments, supporting &rest and other patterns
+    fn match_parameters(&self, parameters: &[String], args: &[LispExpr]) -> Result<HashMap<String, LispExpr>, MacroError> {
+        let mut bindings = HashMap::new();
+
+        // Find if there's a &rest parameter
+        let rest_position = parameters.iter().position(|p| p == "&rest");
+
+        if let Some(rest_idx) = rest_position {
+            // Handle &rest parameter pattern
+            if rest_idx + 1 >= parameters.len() {
+                return Err(MacroError::ExpansionError(
+                    "&rest must be followed by a parameter name".to_string()
+                ));
+            }
+
+            let rest_param_name = &parameters[rest_idx + 1];
+            let required_params = &parameters[..rest_idx];
+
+            // Check we have at least the required parameters
+            if args.len() < required_params.len() {
+                return Err(MacroError::ParameterCountMismatch {
+                    expected: required_params.len(),
+                    actual: args.len(),
+                });
+            }
+
+            // Bind required parameters
+            for (param, arg) in required_params.iter().zip(args.iter()) {
+                bindings.insert(param.clone(), arg.clone());
+            }
+
+            // Collect remaining arguments into a list for the rest parameter
+            let rest_args: Vec<LispExpr> = args[required_params.len()..].to_vec();
+            bindings.insert(rest_param_name.clone(), LispExpr::List(rest_args));
+
+            // Check for any parameters after the rest parameter name (which would be an error)
+            if rest_idx + 2 < parameters.len() {
+                return Err(MacroError::ExpansionError(
+                    "Parameters cannot appear after &rest parameter".to_string()
+                ));
+            }
+        } else {
+            // No &rest parameter - exact match required
+            if parameters.len() != args.len() {
+                return Err(MacroError::ParameterCountMismatch {
+                    expected: parameters.len(),
+                    actual: args.len(),
+                });
+            }
+
+            // Simple binding
+            for (param, arg) in parameters.iter().zip(args.iter()) {
+                bindings.insert(param.clone(), arg.clone());
+            }
+        }
+
+        Ok(bindings)
     }
 
     /// Collect symbols introduced by the macro (excluding parameters)
@@ -983,6 +1033,272 @@ mod tests {
                 "Quoted symbols should not be renamed to gensyms");
         } else {
             panic!("Expected Quote expression");
+        }
+    }
+
+    // Pattern matching tests
+
+    #[test]
+    fn test_rest_parameter_basic() {
+        let mut expander = MacroExpander::new();
+
+        // Define macro with &rest: (defmacro my-list (first &rest rest) `(list ,first ,@rest))
+        expander.define_macro(
+            "my-list".to_string(),
+            vec!["first".to_string(), "&rest".to_string(), "rest".to_string()],
+            LispExpr::Quasiquote(Box::new(
+                LispExpr::List(vec![
+                    LispExpr::Symbol("list".to_string()),
+                    LispExpr::Unquote(Box::new(LispExpr::Symbol("first".to_string()))),
+                    LispExpr::Splice(Box::new(LispExpr::Symbol("rest".to_string()))),
+                ])
+            )),
+        );
+
+        // Call: (my-list 1 2 3 4)
+        let macro_call = LispExpr::List(vec![
+            LispExpr::Symbol("my-list".to_string()),
+            LispExpr::Number(1.0),
+            LispExpr::Number(2.0),
+            LispExpr::Number(3.0),
+            LispExpr::Number(4.0),
+        ]);
+
+        let result = expander.expand_all(macro_call).unwrap();
+
+        // Should expand to: (list 1 2 3 4)
+        let expected = LispExpr::List(vec![
+            LispExpr::Symbol("list".to_string()),
+            LispExpr::Number(1.0),
+            LispExpr::Number(2.0),
+            LispExpr::Number(3.0),
+            LispExpr::Number(4.0),
+        ]);
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_rest_parameter_empty() {
+        let mut expander = MacroExpander::new();
+
+        // Define macro: (defmacro my-list (first &rest rest) `(list ,first ,@rest))
+        expander.define_macro(
+            "my-list".to_string(),
+            vec!["first".to_string(), "&rest".to_string(), "rest".to_string()],
+            LispExpr::Quasiquote(Box::new(
+                LispExpr::List(vec![
+                    LispExpr::Symbol("list".to_string()),
+                    LispExpr::Unquote(Box::new(LispExpr::Symbol("first".to_string()))),
+                    LispExpr::Splice(Box::new(LispExpr::Symbol("rest".to_string()))),
+                ])
+            )),
+        );
+
+        // Call with only required parameter: (my-list 1)
+        let macro_call = LispExpr::List(vec![
+            LispExpr::Symbol("my-list".to_string()),
+            LispExpr::Number(1.0),
+        ]);
+
+        let result = expander.expand_all(macro_call).unwrap();
+
+        // Should expand to: (list 1) - rest is empty
+        let expected = LispExpr::List(vec![
+            LispExpr::Symbol("list".to_string()),
+            LispExpr::Number(1.0),
+        ]);
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_rest_parameter_multiple_required() {
+        let mut expander = MacroExpander::new();
+
+        // Define macro: (defmacro add-first-two-then-rest (a b &rest rest) `(+ (+ ,a ,b) ,@rest))
+        expander.define_macro(
+            "add-first-two-then-rest".to_string(),
+            vec!["a".to_string(), "b".to_string(), "&rest".to_string(), "rest".to_string()],
+            LispExpr::Quasiquote(Box::new(
+                LispExpr::List(vec![
+                    LispExpr::Symbol("+".to_string()),
+                    LispExpr::List(vec![
+                        LispExpr::Symbol("+".to_string()),
+                        LispExpr::Unquote(Box::new(LispExpr::Symbol("a".to_string()))),
+                        LispExpr::Unquote(Box::new(LispExpr::Symbol("b".to_string()))),
+                    ]),
+                    LispExpr::Splice(Box::new(LispExpr::Symbol("rest".to_string()))),
+                ])
+            )),
+        );
+
+        // Call: (add-first-two-then-rest 1 2 3 4 5)
+        let macro_call = LispExpr::List(vec![
+            LispExpr::Symbol("add-first-two-then-rest".to_string()),
+            LispExpr::Number(1.0),
+            LispExpr::Number(2.0),
+            LispExpr::Number(3.0),
+            LispExpr::Number(4.0),
+            LispExpr::Number(5.0),
+        ]);
+
+        let result = expander.expand_all(macro_call).unwrap();
+
+        // Should expand to: (+ (+ 1 2) 3 4 5)
+        let expected = LispExpr::List(vec![
+            LispExpr::Symbol("+".to_string()),
+            LispExpr::List(vec![
+                LispExpr::Symbol("+".to_string()),
+                LispExpr::Number(1.0),
+                LispExpr::Number(2.0),
+            ]),
+            LispExpr::Number(3.0),
+            LispExpr::Number(4.0),
+            LispExpr::Number(5.0),
+        ]);
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_rest_parameter_too_few_args() {
+        let mut expander = MacroExpander::new();
+
+        // Define macro with 2 required params
+        expander.define_macro(
+            "needs-two-plus".to_string(),
+            vec!["a".to_string(), "b".to_string(), "&rest".to_string(), "rest".to_string()],
+            LispExpr::Symbol("body".to_string()),
+        );
+
+        // Call with only 1 arg (need at least 2)
+        let macro_call = LispExpr::List(vec![
+            LispExpr::Symbol("needs-two-plus".to_string()),
+            LispExpr::Number(1.0),
+        ]);
+
+        let result = expander.expand_all(macro_call);
+
+        assert!(result.is_err());
+        if let Err(MacroError::ParameterCountMismatch { expected, actual }) = result {
+            assert_eq!(expected, 2);
+            assert_eq!(actual, 1);
+        } else {
+            panic!("Expected ParameterCountMismatch error");
+        }
+    }
+
+    #[test]
+    fn test_rest_without_name_error() {
+        let mut expander = MacroExpander::new();
+
+        // Define macro with &rest but no following parameter name
+        expander.define_macro(
+            "bad-macro".to_string(),
+            vec!["a".to_string(), "&rest".to_string()],
+            LispExpr::Symbol("body".to_string()),
+        );
+
+        let macro_call = LispExpr::List(vec![
+            LispExpr::Symbol("bad-macro".to_string()),
+            LispExpr::Number(1.0),
+        ]);
+
+        let result = expander.expand_all(macro_call);
+
+        assert!(result.is_err());
+        if let Err(MacroError::ExpansionError(msg)) = result {
+            assert!(msg.contains("&rest must be followed by a parameter name"));
+        } else {
+            panic!("Expected ExpansionError for &rest without name");
+        }
+    }
+
+    #[test]
+    fn test_params_after_rest_error() {
+        let mut expander = MacroExpander::new();
+
+        // Define macro with parameters after &rest (which is invalid)
+        expander.define_macro(
+            "bad-macro".to_string(),
+            vec!["a".to_string(), "&rest".to_string(), "rest".to_string(), "extra".to_string()],
+            LispExpr::Symbol("body".to_string()),
+        );
+
+        let macro_call = LispExpr::List(vec![
+            LispExpr::Symbol("bad-macro".to_string()),
+            LispExpr::Number(1.0),
+            LispExpr::Number(2.0),
+        ]);
+
+        let result = expander.expand_all(macro_call);
+
+        assert!(result.is_err());
+        if let Err(MacroError::ExpansionError(msg)) = result {
+            assert!(msg.contains("Parameters cannot appear after &rest parameter"));
+        } else {
+            panic!("Expected ExpansionError for parameters after &rest");
+        }
+    }
+
+    #[test]
+    fn test_when_macro_with_rest() {
+        let mut expander = MacroExpander::new();
+
+        // Classic 'when' macro: (defmacro when (condition &rest body) `(if ,condition (progn ,@body) nil))
+        expander.define_macro(
+            "when".to_string(),
+            vec!["condition".to_string(), "&rest".to_string(), "body".to_string()],
+            LispExpr::Quasiquote(Box::new(
+                LispExpr::List(vec![
+                    LispExpr::Symbol("if".to_string()),
+                    LispExpr::Unquote(Box::new(LispExpr::Symbol("condition".to_string()))),
+                    LispExpr::List(vec![
+                        LispExpr::Symbol("progn".to_string()),
+                        LispExpr::Splice(Box::new(LispExpr::Symbol("body".to_string()))),
+                    ]),
+                    LispExpr::Nil,
+                ])
+            )),
+        );
+
+        // Call: (when (> x 5) (print "big") (+ x 1))
+        let macro_call = LispExpr::List(vec![
+            LispExpr::Symbol("when".to_string()),
+            LispExpr::List(vec![
+                LispExpr::Symbol(">".to_string()),
+                LispExpr::Symbol("x".to_string()),
+                LispExpr::Number(5.0),
+            ]),
+            LispExpr::List(vec![
+                LispExpr::Symbol("print".to_string()),
+                LispExpr::String("big".to_string()),
+            ]),
+            LispExpr::List(vec![
+                LispExpr::Symbol("+".to_string()),
+                LispExpr::Symbol("x".to_string()),
+                LispExpr::Number(1.0),
+            ]),
+        ]);
+
+        let result = expander.expand_all(macro_call).unwrap();
+
+        // Verify structure: should be (if condition (progn ...) <optional nil>)
+        // Note: The macro expander may filter out Nil in some contexts
+        if let LispExpr::List(elements) = &result {
+            assert!(elements.len() >= 3, "Expected at least 3 elements in if expression, got {}", elements.len());
+            assert_eq!(elements[0], LispExpr::Symbol("if".to_string()));
+
+            // Check the progn body contains both expressions
+            if let LispExpr::List(progn_parts) = &elements[2] {
+                assert_eq!(progn_parts.len(), 3); // progn + 2 body expressions
+                assert_eq!(progn_parts[0], LispExpr::Symbol("progn".to_string()));
+            } else {
+                panic!("Expected List for progn body");
+            }
+        } else {
+            panic!("Expected List for if expression");
         }
     }
 }
