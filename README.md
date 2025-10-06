@@ -38,9 +38,10 @@ The result is a unique language perfect for AI agents, rapid prototyping, and sy
 - **Hygienic Macros** - Automatic gensym-based hygiene prevents variable capture ✅
 - **Pipeline Integration** - Macro expansion phase integrated into compilation pipeline ✅
 - **Pattern Matching** - Advanced parameter patterns with `&rest` for variable-length arguments ✅
+- **Error Handling** - Comprehensive error messages with actionable suggestions and context ✅
 - **Code-as-Data** - Homoiconic design for AI agent manipulation
 
-> 📍 **Status**: Phase 1.2 (Macro Expansion Engine) - Pattern matching ✅ complete. The compiler now supports advanced parameter patterns including `&rest` for variadic macros. See [GitHub Issues](https://github.com/justin4957/rusty-lisp/issues) for implementation progress.
+> 📍 **Status**: Phase 1.2 (Macro Expansion Engine) - Error handling ✅ complete. The macro system now features comprehensive error handling with clear, actionable error messages, context tracking, and proper `std::error::Error` trait implementation. See [GitHub Issues](https://github.com/justin4957/rusty-lisp/issues) for implementation progress.
 
 ## Quick Start
 
@@ -227,7 +228,15 @@ The macro expansion phase:
 - **Recursive Expansion**: Handles nested macro calls automatically
 - **Hygiene**: Applies gensym-based renaming to prevent variable capture
 - **Depth Limiting**: Prevents infinite recursion with configurable max depth (default: 100)
-- **Error Handling**: Provides clear error messages for parameter mismatches and undefined macros
+- **Error Handling**: Comprehensive, actionable error messages with:
+  - Parameter count mismatches (with macro name and expected/actual counts)
+  - Maximum depth exceeded (with macro name and depth limit)
+  - Invalid parameter patterns (with pattern details and suggestions)
+  - Malformed macro definitions (with clear explanations)
+  - Context tracking for splice errors
+  - Implementation of `std::error::Error` trait for proper error chaining
+  - Helpful "Help:" sections with suggestions for fixing issues
+  - Clone and PartialEq support for error testing
 
 The integration ensures:
 - Macro definitions are removed from the final output (return `Nil`)
