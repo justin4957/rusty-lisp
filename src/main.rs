@@ -171,4 +171,74 @@ mod tests {
         // Should expand to (+ (+ 5 1) (- 10 1))
         assert!(result.contains("((5 + 1) + (10 - 1))"));
     }
+
+    // Pattern matching tests
+
+    #[test]
+    fn test_pipeline_rest_parameter() {
+        let source = r#"
+            (defmacro add-all (first &rest rest) `(+ ,first ,@rest))
+            (add-all 1 2 3 4 5)
+        "#;
+
+        let result = compile_lisp(source).unwrap();
+
+        // Should expand to (+ 1 2 3 4 5)
+        assert!(result.contains("(1 + 2 + 3 + 4 + 5)"));
+    }
+
+    #[test]
+    fn test_pipeline_rest_parameter_empty() {
+        let source = r#"
+            (defmacro add-all (first &rest rest) `(+ ,first ,@rest))
+            (add-all 42)
+        "#;
+
+        let result = compile_lisp(source).unwrap();
+
+        // Should expand to (+ 42) which compiles to just 42
+        assert!(result.contains("42"));
+    }
+
+    #[test]
+    fn test_pipeline_rest_with_multiple_required() {
+        let source = r#"
+            (defmacro add-first-two-then-rest (a b &rest rest) `(+ (+ ,a ,b) ,@rest))
+            (add-first-two-then-rest 1 2 3 4)
+        "#;
+
+        let result = compile_lisp(source).unwrap();
+
+        // Should expand to (+ (+ 1 2) 3 4)
+        assert!(result.contains("((1 + 2) + 3 + 4)"));
+    }
+
+    #[test]
+    fn test_pipeline_rest_too_few_args_error() {
+        let source = r#"
+            (defmacro needs-two (a b &rest rest) `(+ ,a ,b))
+            (needs-two 1)
+        "#;
+
+        let result = compile_lisp(source);
+
+        // Should error - need at least 2 args but got only 1
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Parameter count mismatch"));
+    }
+
+    #[test]
+    fn test_pipeline_rest_complex_macro() {
+        // Test a realistic macro using &rest
+        let source = r#"
+            (defmacro my-list (first &rest rest) `(list ,first ,@rest))
+            (+ (my-list 1 2 3) (my-list 10 20))
+        "#;
+
+        let result = compile_lisp(source).unwrap();
+
+        // Should expand both my-list calls
+        assert!(result.contains("vec![1, 2, 3]"));
+        assert!(result.contains("vec![10, 20]"));
+    }
 }

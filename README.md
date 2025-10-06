@@ -37,9 +37,10 @@ The result is a unique language perfect for AI agents, rapid prototyping, and sy
 - **Macro Expansion** - Basic macro expansion engine with parameter substitution and recursive expansion ✅
 - **Hygienic Macros** - Automatic gensym-based hygiene prevents variable capture ✅
 - **Pipeline Integration** - Macro expansion phase integrated into compilation pipeline ✅
+- **Pattern Matching** - Advanced parameter patterns with `&rest` for variable-length arguments ✅
 - **Code-as-Data** - Homoiconic design for AI agent manipulation
 
-> 📍 **Status**: Phase 1.2 (Macro Expansion Engine) - Pipeline integration ✅ complete. The compiler now supports full macro expansion between parsing and code generation. See [GitHub Issues](https://github.com/justin4957/rusty-lisp/issues) for implementation progress.
+> 📍 **Status**: Phase 1.2 (Macro Expansion Engine) - Pattern matching ✅ complete. The compiler now supports advanced parameter patterns including `&rest` for variadic macros. See [GitHub Issues](https://github.com/justin4957/rusty-lisp/issues) for implementation progress.
 
 ## Quick Start
 
@@ -124,10 +125,6 @@ rustc output.rs -o program && ./program
 
 ### Macro System
 ```lisp
-; Macro definitions with automatic expansion
-(defmacro when (condition &rest body)
-  `(if ,condition (progn ,@body) nil))
-
 ; Simple macro with parameters
 (defmacro double (x)
   `(* ,x 2))
@@ -140,6 +137,20 @@ rustc output.rs -o program && ./program
   `(double (double ,x)))
 
 (quadruple 3)  ; Expands to: (* (* 3 2) 2)
+
+; Macros with &rest parameters for variable arguments
+(defmacro add-all (first &rest rest)
+  `(+ ,first ,@rest))
+
+(add-all 1 2 3 4 5)  ; Expands to: (+ 1 2 3 4 5)
+
+; Complex example: when macro with multiple body expressions
+(defmacro when (condition &rest body)
+  `(if ,condition (progn ,@body) nil))
+
+(when (> x 5)
+  (print "big")
+  (+ x 1))  ; Expands to: (if (> x 5) (progn (print "big") (+ x 1)) nil)
 
 ; Quote family - Both shorthand and longhand forms supported
 '(+ 1 2 3)                    ; Quote shorthand
@@ -208,7 +219,10 @@ Source → Lexer → Parser → Macro Expander → Compiler → Rust Code
 
 The macro expansion phase:
 - **Registration**: Captures macro definitions from `defmacro` forms
-- **Pattern Matching**: Binds macro parameters to arguments
+- **Pattern Matching**: Advanced parameter binding supporting:
+  - Simple parameters: `(defmacro double (x) ...)`
+  - &rest parameters: `(defmacro add-all (first &rest rest) ...)`
+  - Multiple required + rest: `(defmacro foo (a b &rest others) ...)`
 - **Substitution**: Replaces parameters in macro body with actual arguments
 - **Recursive Expansion**: Handles nested macro calls automatically
 - **Hygiene**: Applies gensym-based renaming to prevent variable capture
@@ -218,8 +232,9 @@ The macro expansion phase:
 The integration ensures:
 - Macro definitions are removed from the final output (return `Nil`)
 - All macro calls are fully expanded before code generation
-- Both basic and nested macros work seamlessly
+- Both basic and variadic macros work seamlessly
 - Regular code passes through unchanged
+- Pattern validation catches errors like `&rest` without a following parameter name
 
 ## Testing
 
