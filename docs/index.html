@@ -87,7 +87,7 @@
                     </div>
                     <div class="feature-card">
                         <h3>🔧 Macro System</h3>
-                        <p>Complete macro infrastructure: defmacro with &rest parameters, quote family, pipeline-integrated expansion engine, and automatic hygiene</p>
+                        <p>Complete macro infrastructure: defmacro with &rest parameters, quote family, recursive expansion with depth limits, pipeline-integrated expansion engine, and automatic hygiene</p>
                     </div>
                 </div>
             </section>
@@ -358,7 +358,7 @@ custom-func</code></pre>
 
 (add-and-multiply 1 2 3)  ; Expands to: (* (+ 1 2) 3)</code></pre>
                         </div>
-                        <p><em>Macro expansion engine fully integrated into compilation pipeline with parameter substitution, recursive expansion, and automatic hygiene</em></p>
+                        <p><em>Macro expansion engine fully integrated into compilation pipeline with parameter substitution, recursive expansion with configurable depth limits (default: 100), and automatic hygiene to prevent variable capture</em></p>
                     </div>
 
                     <div class="example-card">
