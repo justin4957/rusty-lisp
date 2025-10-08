@@ -34,14 +34,16 @@ The result is a unique language perfect for AI agents, rapid prototyping, and sy
 - **Extended AST** - Full macro infrastructure with Quote, Unquote, Quasiquote, and Splice support ✅
 - **Macro Definitions** - `defmacro` syntax parsing with parameter lists and `&rest` support ✅
 - **Quote Family** - Complete quote/unquote/quasiquote/splice parsing (shorthand & longhand) ✅
-- **Macro Expansion** - Basic macro expansion engine with parameter substitution and recursive expansion ✅
+- **Macro Expansion** - Complete macro expansion engine with parameter substitution and recursive expansion ✅
 - **Hygienic Macros** - Automatic gensym-based hygiene prevents variable capture ✅
 - **Pipeline Integration** - Macro expansion phase integrated into compilation pipeline ✅
 - **Pattern Matching** - Advanced parameter patterns with `&rest` for variable-length arguments ✅
 - **Error Handling** - Comprehensive error messages with actionable suggestions and context ✅
+- **Recursion Control** - Configurable depth limits prevent infinite macro expansion loops ✅
 - **Code-as-Data** - Homoiconic design for AI agent manipulation
 
-> 📍 **Status**: Phase 1.2 (Macro Expansion Engine) - Error handling ✅ complete. The macro system now features comprehensive error handling with clear, actionable error messages, context tracking, and proper `std::error::Error` trait implementation. See [GitHub Issues](https://github.com/justin4957/rusty-lisp/issues) for implementation progress.
+> 📍 **Status**: Phase 1.2 (Macro Expansion Engine) - Recursive expansion ✅ complete. The macro system now features robust recursive expansion with configurable depth limits, preventing infinite expansion loops while supporting complex nested macro patterns. See [GitHub Issues](https://github.com/justin4957/rusty-lisp/issues) for implementation progress.
+
 
 ## Quick Start
 
@@ -218,14 +220,18 @@ The `LispExpr` enum supports:
 Source → Lexer → Parser → Macro Expander → Compiler → Rust Code
 ```
 
-The macro expansion phase:
+The macro expansion phase features:
 - **Registration**: Captures macro definitions from `defmacro` forms
 - **Pattern Matching**: Advanced parameter binding supporting:
   - Simple parameters: `(defmacro double (x) ...)`
   - &rest parameters: `(defmacro add-all (first &rest rest) ...)`
   - Multiple required + rest: `(defmacro foo (a b &rest others) ...)`
-- **Substitution**: Replaces parameters in macro body with actual arguments
-- **Recursive Expansion**: Handles nested macro calls automatically
+- **Parameter Substitution**: Replaces parameters in macro body with actual arguments
+- **Recursive Expansion**: Automatically expands nested macro calls to arbitrary depth
+  - Macros can call other macros (composition)
+  - Supports self-recursive macros with depth limits
+  - Configurable maximum expansion depth (default: 100)
+  - Prevents infinite expansion loops with clear error messages
 - **Hygiene**: Applies gensym-based renaming to prevent variable capture
 - **Depth Limiting**: Prevents infinite recursion with configurable max depth (default: 100)
 - **Error Handling**: Comprehensive, actionable error messages with:
