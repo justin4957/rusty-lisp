@@ -124,7 +124,9 @@ mod tests {
 
         // Should error with max depth exceeded
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Maximum expansion depth exceeded"));
+        let error_msg = result.unwrap_err();
+        assert!(error_msg.contains("Maximum expansion depth"));
+        assert!(error_msg.contains("infinite"));
     }
 
     #[test]

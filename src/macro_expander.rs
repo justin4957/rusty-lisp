@@ -16,26 +16,85 @@ pub struct MacroDefinition {
     pub body: LispExpr,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MacroError {
+    /// Attempted to call an undefined macro
     UndefinedMacro(String),
-    ParameterCountMismatch { expected: usize, actual: usize },
-    MaxDepthExceeded(usize),
-    ExpansionError(String),
+
+    /// Macro called with wrong number of arguments
+    ParameterCountMismatch {
+        macro_name: String,
+        expected: usize,
+        actual: usize
+    },
+
+    /// Maximum expansion depth exceeded (likely infinite recursion)
+    MaxDepthExceeded {
+        depth: usize,
+        macro_name: String,
+    },
+
+    /// Generic expansion error with context
+    ExpansionError {
+        message: String,
+        context: Option<String>,
+    },
+
+    /// Malformed macro definition
+    MalformedDefinition {
+        macro_name: String,
+        reason: String,
+    },
+
+    /// Invalid pattern in macro parameters
+    InvalidPattern {
+        pattern: String,
+        reason: String,
+    },
 }
 
 impl std::fmt::Display for MacroError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            MacroError::UndefinedMacro(name) => write!(f, "Undefined macro: {}", name),
-            MacroError::ParameterCountMismatch { expected, actual } => {
-                write!(f, "Parameter count mismatch: expected {}, got {}", expected, actual)
+            MacroError::UndefinedMacro(name) => {
+                write!(f, "Undefined macro: '{}'\n", name)?;
+                write!(f, "  Help: Check that the macro is defined with 'defmacro' before use")
             }
-            MacroError::MaxDepthExceeded(depth) => {
-                write!(f, "Maximum expansion depth exceeded: {}", depth)
+            MacroError::ParameterCountMismatch { macro_name, expected, actual } => {
+                write!(f, "Parameter count mismatch in macro '{}'\n", macro_name)?;
+                write!(f, "  Expected: {} argument{}\n", expected, if *expected == 1 { "" } else { "s" })?;
+                write!(f, "  Got: {} argument{}\n", actual, if *actual == 1 { "" } else { "s" })?;
+                write!(f, "  Help: Check the macro definition and ensure you pass the correct number of arguments")
             }
-            MacroError::ExpansionError(msg) => write!(f, "Expansion error: {}", msg),
+            MacroError::MaxDepthExceeded { depth, macro_name } => {
+                write!(f, "Maximum expansion depth ({}) exceeded in macro '{}'\n", depth, macro_name)?;
+                write!(f, "  Help: This likely indicates infinite recursion in your macro expansion.\n")?;
+                write!(f, "        Check that recursive macros have a proper base case.")
+            }
+            MacroError::ExpansionError { message, context } => {
+                write!(f, "Macro expansion error: {}", message)?;
+                if let Some(ctx) = context {
+                    write!(f, "\n  Context: {}", ctx)?;
+                }
+                Ok(())
+            }
+            MacroError::MalformedDefinition { macro_name, reason } => {
+                write!(f, "Malformed macro definition for '{}'\n", macro_name)?;
+                write!(f, "  Reason: {}\n", reason)?;
+                write!(f, "  Help: Check the syntax of your defmacro form")
+            }
+            MacroError::InvalidPattern { pattern, reason } => {
+                write!(f, "Invalid parameter pattern: '{}'\n", pattern)?;
+                write!(f, "  Reason: {}\n", reason)?;
+                write!(f, "  Help: Valid patterns include simple parameters and &rest patterns")
+            }
         }
+    }
+}
+
+impl std::error::Error for MacroError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
     }
 }
 
@@ -98,7 +157,10 @@ impl MacroExpander {
             // Handle macro calls - expand them (this is for backward compatibility)
             LispExpr::MacroCall { name, args } => {
                 if self.expansion_depth > self.max_depth {
-                    return Err(MacroError::MaxDepthExceeded(self.max_depth));
+                    return Err(MacroError::MaxDepthExceeded {
+                        depth: self.max_depth,
+                        macro_name: name.clone(),
+                    });
                 }
                 self.expansion_depth += 1;
                 let result = self.expand_macro_call(&name, args);
@@ -117,9 +179,12 @@ impl MacroExpander {
                     if self.macros.contains_key(name) {
                         // Check depth before expanding
                         if self.expansion_depth > self.max_depth {
-                            return Err(MacroError::MaxDepthExceeded(self.max_depth));
+                            return Err(MacroError::MaxDepthExceeded {
+                                depth: self.max_depth,
+                                macro_name: name.clone(),
+                            });
                         }
-                        
+
                         // This is a macro call - convert and expand
                         let args = elements[1..].to_vec();
                         self.expansion_depth += 1;
@@ -169,8 +234,11 @@ impl MacroExpander {
             .ok_or_else(|| MacroError::UndefinedMacro(name.to_string()))?
             .clone();
 
+        // Store macro name for better error messages
+        let macro_name = name.to_string();
+
         // Create parameter bindings using pattern matching
-        let bindings = self.match_parameters(&macro_def.parameters, &args)?;
+        let bindings = self.match_parameters(&macro_name, &macro_def.parameters, &args)?;
 
         // Apply hygiene: collect symbols introduced by the macro (not parameters)
         let param_names: Vec<String> = bindings.keys().cloned().collect();
@@ -194,7 +262,7 @@ impl MacroExpander {
     }
 
     /// Match macro parameters against arguments, supporting &rest and other patterns
-    fn match_parameters(&self, parameters: &[String], args: &[LispExpr]) -> Result<HashMap<String, LispExpr>, MacroError> {
+    fn match_parameters(&self, macro_name: &str, parameters: &[String], args: &[LispExpr]) -> Result<HashMap<String, LispExpr>, MacroError> {
         let mut bindings = HashMap::new();
 
         // Find if there's a &rest parameter
@@ -203,9 +271,10 @@ impl MacroExpander {
         if let Some(rest_idx) = rest_position {
             // Handle &rest parameter pattern
             if rest_idx + 1 >= parameters.len() {
-                return Err(MacroError::ExpansionError(
-                    "&rest must be followed by a parameter name".to_string()
-                ));
+                return Err(MacroError::InvalidPattern {
+                    pattern: "&rest".to_string(),
+                    reason: "&rest must be followed by a parameter name".to_string(),
+                });
             }
 
             let rest_param_name = &parameters[rest_idx + 1];
@@ -214,6 +283,7 @@ impl MacroExpander {
             // Check we have at least the required parameters
             if args.len() < required_params.len() {
                 return Err(MacroError::ParameterCountMismatch {
+                    macro_name: macro_name.to_string(),
                     expected: required_params.len(),
                     actual: args.len(),
                 });
@@ -230,14 +300,16 @@ impl MacroExpander {
 
             // Check for any parameters after the rest parameter name (which would be an error)
             if rest_idx + 2 < parameters.len() {
-                return Err(MacroError::ExpansionError(
-                    "Parameters cannot appear after &rest parameter".to_string()
-                ));
+                return Err(MacroError::InvalidPattern {
+                    pattern: format!("&rest {}", rest_param_name),
+                    reason: "Parameters cannot appear after &rest parameter".to_string(),
+                });
             }
         } else {
             // No &rest parameter - exact match required
             if parameters.len() != args.len() {
                 return Err(MacroError::ParameterCountMismatch {
+                    macro_name: macro_name.to_string(),
                     expected: parameters.len(),
                     actual: args.len(),
                 });
@@ -421,9 +493,10 @@ impl MacroExpander {
                         if let LispExpr::List(splice_elements) = expanded {
                             expanded_elements.extend(splice_elements);
                         } else {
-                            return Err(MacroError::ExpansionError(
-                                "Splice must expand to a list".to_string()
-                            ));
+                            return Err(MacroError::ExpansionError {
+                                message: "Splice (unquote-splicing) must expand to a list".to_string(),
+                                context: Some(format!("Got: {:?}", expanded)),
+                            });
                         }
                     } else {
                         let expanded = self.expand_quasiquote(element)?;
@@ -455,9 +528,10 @@ impl MacroExpander {
                         if let LispExpr::List(splice_elements) = substituted {
                             expanded_elements.extend(splice_elements);
                         } else {
-                            return Err(MacroError::ExpansionError(
-                                "Splice must expand to a list".to_string()
-                            ));
+                            return Err(MacroError::ExpansionError {
+                                message: "Splice (unquote-splicing) must expand to a list".to_string(),
+                                context: Some(format!("Got: {:?}", substituted)),
+                            });
                         }
                     } else {
                         let expanded = self.expand_quasiquote_with_substitution(element, bindings)?;
@@ -638,8 +712,9 @@ mod tests {
         
         let result = expander.expand_all(macro_call);
         assert!(result.is_err());
-        
-        if let Err(MacroError::ParameterCountMismatch { expected, actual }) = result {
+
+        if let Err(MacroError::ParameterCountMismatch { macro_name, expected, actual }) = result {
+            assert_eq!(macro_name, "test_macro");
             assert_eq!(expected, 2);
             assert_eq!(actual, 1);
         } else {
@@ -748,8 +823,9 @@ mod tests {
         let result = expander.expand_all(macro_call);
         assert!(result.is_err());
 
-        if let Err(MacroError::MaxDepthExceeded(depth)) = result {
+        if let Err(MacroError::MaxDepthExceeded { depth, macro_name }) = result {
             assert_eq!(depth, 2);
+            assert_eq!(macro_name, "recursive_macro");
         } else {
             panic!("Expected MaxDepthExceeded error, got: {:?}", result);
         }
@@ -1181,7 +1257,8 @@ mod tests {
         let result = expander.expand_all(macro_call);
 
         assert!(result.is_err());
-        if let Err(MacroError::ParameterCountMismatch { expected, actual }) = result {
+        if let Err(MacroError::ParameterCountMismatch { macro_name, expected, actual }) = result {
+            assert_eq!(macro_name, "needs-two-plus");
             assert_eq!(expected, 2);
             assert_eq!(actual, 1);
         } else {
@@ -1208,10 +1285,11 @@ mod tests {
         let result = expander.expand_all(macro_call);
 
         assert!(result.is_err());
-        if let Err(MacroError::ExpansionError(msg)) = result {
-            assert!(msg.contains("&rest must be followed by a parameter name"));
+        if let Err(MacroError::InvalidPattern { pattern, reason }) = result {
+            assert_eq!(pattern, "&rest");
+            assert!(reason.contains("&rest must be followed by a parameter name"));
         } else {
-            panic!("Expected ExpansionError for &rest without name");
+            panic!("Expected InvalidPattern error for &rest without name, got: {:?}", result);
         }
     }
 
@@ -1235,10 +1313,11 @@ mod tests {
         let result = expander.expand_all(macro_call);
 
         assert!(result.is_err());
-        if let Err(MacroError::ExpansionError(msg)) = result {
-            assert!(msg.contains("Parameters cannot appear after &rest parameter"));
+        if let Err(MacroError::InvalidPattern { pattern, reason }) = result {
+            assert!(pattern.contains("&rest"));
+            assert!(reason.contains("Parameters cannot appear after &rest parameter"));
         } else {
-            panic!("Expected ExpansionError for parameters after &rest");
+            panic!("Expected InvalidPattern error for parameters after &rest, got: {:?}", result);
         }
     }
 
@@ -1300,5 +1379,153 @@ mod tests {
         } else {
             panic!("Expected List for if expression");
         }
+    }
+
+    // Comprehensive error message tests
+
+    #[test]
+    fn test_error_message_quality_undefined_macro() {
+        let mut expander = MacroExpander::new();
+
+        // Try to expand undefined macro - these pass through as regular function calls
+        let macro_call = LispExpr::List(vec![
+            LispExpr::Symbol("undefined".to_string()),
+            LispExpr::Number(1.0),
+        ]);
+
+        let result = expander.expand_all(macro_call.clone());
+        // Undefined macros pass through unchanged (they might be regular functions)
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), macro_call);
+    }
+
+    #[test]
+    fn test_error_message_quality_param_mismatch() {
+        let mut expander = MacroExpander::new();
+
+        expander.define_macro(
+            "my-macro".to_string(),
+            vec!["x".to_string(), "y".to_string()],
+            LispExpr::Symbol("body".to_string()),
+        );
+
+        let macro_call = LispExpr::List(vec![
+            LispExpr::Symbol("my-macro".to_string()),
+            LispExpr::Number(1.0),
+        ]);
+
+        let result = expander.expand_all(macro_call);
+        assert!(result.is_err());
+
+        let error = result.unwrap_err();
+        let error_msg = format!("{}", error);
+
+        // Check for helpful error message
+        assert!(error_msg.contains("my-macro"));
+        assert!(error_msg.contains("2"));
+        assert!(error_msg.contains("1"));
+        assert!(error_msg.contains("Help"));
+    }
+
+    #[test]
+    fn test_error_message_quality_max_depth() {
+        let mut expander = MacroExpander::with_max_depth(5);
+
+        // Define recursive macro
+        expander.define_macro(
+            "infinite".to_string(),
+            vec!["x".to_string()],
+            LispExpr::Quasiquote(Box::new(
+                LispExpr::List(vec![
+                    LispExpr::Symbol("infinite".to_string()),
+                    LispExpr::Unquote(Box::new(LispExpr::Symbol("x".to_string()))),
+                ])
+            )),
+        );
+
+        let macro_call = LispExpr::List(vec![
+            LispExpr::Symbol("infinite".to_string()),
+            LispExpr::Number(1.0),
+        ]);
+
+        let result = expander.expand_all(macro_call);
+        assert!(result.is_err());
+
+        let error = result.unwrap_err();
+        let error_msg = format!("{}", error);
+
+        // Check for helpful error message
+        assert!(error_msg.contains("infinite"));
+        assert!(error_msg.contains("5"));
+        assert!(error_msg.contains("Help"));
+        assert!(error_msg.contains("infinite recursion") || error_msg.contains("base case"));
+    }
+
+    #[test]
+    fn test_error_message_quality_invalid_pattern() {
+        let mut expander = MacroExpander::new();
+
+        // Define macro with bad &rest pattern
+        expander.define_macro(
+            "bad".to_string(),
+            vec!["a".to_string(), "&rest".to_string()],
+            LispExpr::Symbol("body".to_string()),
+        );
+
+        let macro_call = LispExpr::List(vec![
+            LispExpr::Symbol("bad".to_string()),
+            LispExpr::Number(1.0),
+        ]);
+
+        let result = expander.expand_all(macro_call);
+        assert!(result.is_err());
+
+        let error = result.unwrap_err();
+        let error_msg = format!("{}", error);
+
+        // Check for helpful error message
+        assert!(error_msg.contains("&rest"));
+        assert!(error_msg.contains("parameter name"));
+        assert!(error_msg.contains("Help"));
+    }
+
+    #[test]
+    fn test_std_error_trait_implementation() {
+        use std::error::Error;
+
+        let error = MacroError::UndefinedMacro("test".to_string());
+
+        // Test that it implements Error trait
+        let _boxed: Box<dyn Error> = Box::new(error);
+    }
+
+    #[test]
+    fn test_error_context_in_expansion_error() {
+        let error = MacroError::ExpansionError {
+            message: "Something went wrong".to_string(),
+            context: Some("While expanding macro foo".to_string()),
+        };
+
+        let error_msg = format!("{}", error);
+        assert!(error_msg.contains("Something went wrong"));
+        assert!(error_msg.contains("While expanding macro foo"));
+    }
+
+    #[test]
+    fn test_clone_and_partialeq_on_errors() {
+        let error1 = MacroError::UndefinedMacro("test".to_string());
+        let error2 = error1.clone();
+
+        assert_eq!(error1, error2);
+
+        let error3 = MacroError::ParameterCountMismatch {
+            macro_name: "foo".to_string(),
+            expected: 2,
+            actual: 1,
+        };
+        let error4 = error3.clone();
+
+        assert_eq!(error3, error4);
+        assert_ne!(error1, error3);
     }
 }

@@ -94,7 +94,7 @@ impl MacroExpander {
 - [x] Macro expansion phase in compilation pipeline ✅ **COMPLETED** - [Issue #6](https://github.com/justin4957/rusty-lisp/issues/6)
 - [x] Pattern matching for macro parameters ✅ **COMPLETED** - [Issue #7](https://github.com/justin4957/rusty-lisp/issues/7)
 - [x] Recursive expansion with depth limits ✅ **COMPLETED** - [Issue #8](https://github.com/justin4957/rusty-lisp/issues/8)
-- [ ] Error handling for macro expansion failures 📋 **PLANNED** - [Issue #9](https://github.com/justin4957/rusty-lisp/issues/9)
+- [x] Error handling for macro expansion failures ✅ **COMPLETED** - [Issue #9](https://github.com/justin4957/rusty-lisp/issues/9)
 
 ---
 
