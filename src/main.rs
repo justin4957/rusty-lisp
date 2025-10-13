@@ -3,20 +3,57 @@ mod parser;
 mod compiler;
 mod ast;
 mod macro_expander;
+mod transform;
 
 use std::env;
 use std::fs;
 use std::process;
+use transform::{TransformRegistry, EchoTransform};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    
-    if args.len() != 2 {
-        eprintln!("Usage: {} <input.lisp>", args[0]);
-        process::exit(1);
+
+    let mut input_file: Option<&String> = None;
+    let mut transform_names: Vec<String> = Vec::new();
+
+    let mut i = 1;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--transforms" => {
+                if i + 1 >= args.len() {
+                    eprintln!("Error: --transforms requires an argument");
+                    print_usage(&args[0]);
+                    process::exit(1);
+                }
+                i += 1;
+                transform_names = args[i].split(',').map(|s| s.trim().to_string()).collect();
+            }
+            arg if arg.starts_with("--") => {
+                eprintln!("Error: unknown option '{}'", arg);
+                print_usage(&args[0]);
+                process::exit(1);
+            }
+            _ => {
+                if input_file.is_some() {
+                    eprintln!("Error: multiple input files specified");
+                    print_usage(&args[0]);
+                    process::exit(1);
+                }
+                input_file = Some(&args[i]);
+            }
+        }
+        i += 1;
     }
-    
-    let input_file = &args[1];
+
+    let input_file = match input_file {
+        Some(f) => f,
+        None => {
+            eprintln!("Error: no input file specified");
+            print_usage(&args[0]);
+            process::exit(1);
+        }
+    };
+
     let source_code = match fs::read_to_string(input_file) {
         Ok(content) => content,
         Err(err) => {
@@ -24,8 +61,21 @@ fn main() {
             process::exit(1);
         }
     };
-    
-    match compile_lisp(&source_code) {
+
+    // Build transform registry from CLI args
+    let mut registry = TransformRegistry::new();
+    for name in &transform_names {
+        match name.as_str() {
+            "echo" => registry.register(Box::new(EchoTransform::new())),
+            other => {
+                eprintln!("Error: unknown transform '{}'", other);
+                eprintln!("Available transforms: echo");
+                process::exit(1);
+            }
+        }
+    }
+
+    match compile_lisp(&source_code, registry) {
         Ok(rust_code) => println!("{}", rust_code),
         Err(err) => {
             eprintln!("Compilation error: {}", err);
@@ -34,15 +84,34 @@ fn main() {
     }
 }
 
-fn compile_lisp(source: &str) -> Result<String, String> {
+fn print_usage(program_name: &str) {
+    eprintln!("Usage: {} [OPTIONS] <input.lisp>", program_name);
+    eprintln!();
+    eprintln!("Options:");
+    eprintln!("  --transforms <list>  Comma-separated list of transforms to apply");
+    eprintln!("                       Available: echo");
+    eprintln!();
+    eprintln!("Example:");
+    eprintln!("  {} --transforms echo,optimization example.lisp", program_name);
+}
+
+fn compile_lisp(source: &str, registry: TransformRegistry) -> Result<String, String> {
     let tokens = lexer::tokenize(source)?;
     let ast = parser::parse(tokens)?;
 
-    // Expand macros in the AST
+    // Apply AST transformations (between parsing and macro expansion)
+    let mut transformed_ast = Vec::new();
+    for mut expr in ast {
+        registry.apply_all(&mut expr)
+            .map_err(|e| format!("Transform error: {}", e))?;
+        transformed_ast.push(expr);
+    }
+
+    // Expand macros in the transformed AST
     let mut expander = macro_expander::MacroExpander::new();
     let mut expanded_ast = Vec::new();
 
-    for expr in ast {
+    for expr in transformed_ast {
         let expanded = expander.expand_all(expr)
             .map_err(|e| format!("Macro expansion error: {}", e))?;
 
@@ -67,7 +136,8 @@ mod tests {
             (double 5)
         "#;
 
-        let result = compile_lisp(source).unwrap();
+        let registry = TransformRegistry::new();
+        let result = compile_lisp(source, registry).unwrap();
 
         // Should expand to (* 5 2) and compile to Rust
         assert!(result.contains("(5 * 2)"));
@@ -80,7 +150,8 @@ mod tests {
             (add-and-mult 1 2 3)
         "#;
 
-        let result = compile_lisp(source).unwrap();
+        let registry = TransformRegistry::new();
+        let result = compile_lisp(source, registry).unwrap();
 
         // Should expand to (* (+ 1 2) 3)
         assert!(result.contains("((1 + 2) * 3)"));
@@ -94,7 +165,8 @@ mod tests {
             (quadruple 5)
         "#;
 
-        let result = compile_lisp(source).unwrap();
+        let registry = TransformRegistry::new();
+        let result = compile_lisp(source, registry).unwrap();
 
         // Should fully expand nested macros to (* (* 5 2) 2)
         assert!(result.contains("((5 * 2) * 2)"));
@@ -107,7 +179,8 @@ mod tests {
             (+ (square 3) (square 4))
         "#;
 
-        let result = compile_lisp(source).unwrap();
+        let registry = TransformRegistry::new();
+        let result = compile_lisp(source, registry).unwrap();
 
         // Should expand to (+ (* 3 3) (* 4 4))
         assert!(result.contains("((3 * 3) + (4 * 4))"));
@@ -120,7 +193,8 @@ mod tests {
             (infinite 1)
         "#;
 
-        let result = compile_lisp(source);
+        let registry = TransformRegistry::new();
+        let result = compile_lisp(source, registry);
 
         // Should error with max depth exceeded
         assert!(result.is_err());
@@ -136,7 +210,8 @@ mod tests {
             (needs-two 1)
         "#;
 
-        let result = compile_lisp(source);
+        let registry = TransformRegistry::new();
+        let result = compile_lisp(source, registry);
 
         // Should error with parameter count mismatch
         assert!(result.is_err());
@@ -145,13 +220,14 @@ mod tests {
 
     #[test]
     fn test_pipeline_ordering() {
-        // This test verifies the pipeline ordering: parse → expand → compile
+        // This test verifies the pipeline ordering: parse → transform → expand → compile
         let source = r#"
             (defmacro when (condition body else-body) `(if ,condition ,body ,else-body))
             (when (> 5 3) (+ 1 2) (+ 4 5))
         "#;
 
-        let result = compile_lisp(source).unwrap();
+        let registry = TransformRegistry::new();
+        let result = compile_lisp(source, registry).unwrap();
 
         // Should expand when macro to if expression
         assert!(result.contains("if"));
@@ -168,7 +244,8 @@ mod tests {
             (+ (inc 5) (dec 10))
         "#;
 
-        let result = compile_lisp(source).unwrap();
+        let registry = TransformRegistry::new();
+        let result = compile_lisp(source, registry).unwrap();
 
         // Should expand to (+ (+ 5 1) (- 10 1))
         assert!(result.contains("((5 + 1) + (10 - 1))"));
@@ -183,7 +260,8 @@ mod tests {
             (add-all 1 2 3 4 5)
         "#;
 
-        let result = compile_lisp(source).unwrap();
+        let registry = TransformRegistry::new();
+        let result = compile_lisp(source, registry).unwrap();
 
         // Should expand to (+ 1 2 3 4 5)
         assert!(result.contains("(1 + 2 + 3 + 4 + 5)"));
@@ -196,7 +274,8 @@ mod tests {
             (add-all 42)
         "#;
 
-        let result = compile_lisp(source).unwrap();
+        let registry = TransformRegistry::new();
+        let result = compile_lisp(source, registry).unwrap();
 
         // Should expand to (+ 42) which compiles to just 42
         assert!(result.contains("42"));
@@ -209,7 +288,8 @@ mod tests {
             (add-first-two-then-rest 1 2 3 4)
         "#;
 
-        let result = compile_lisp(source).unwrap();
+        let registry = TransformRegistry::new();
+        let result = compile_lisp(source, registry).unwrap();
 
         // Should expand to (+ (+ 1 2) 3 4)
         assert!(result.contains("((1 + 2) + 3 + 4)"));
@@ -222,7 +302,8 @@ mod tests {
             (needs-two 1)
         "#;
 
-        let result = compile_lisp(source);
+        let registry = TransformRegistry::new();
+        let result = compile_lisp(source, registry);
 
         // Should error - need at least 2 args but got only 1
         assert!(result.is_err());
@@ -237,10 +318,47 @@ mod tests {
             (+ (my-list 1 2 3) (my-list 10 20))
         "#;
 
-        let result = compile_lisp(source).unwrap();
+        let registry = TransformRegistry::new();
+        let result = compile_lisp(source, registry).unwrap();
 
         // Should expand both my-list calls
         assert!(result.contains("vec![1, 2, 3]"));
         assert!(result.contains("vec![10, 20]"));
+    }
+
+    // Transform tests
+
+    #[test]
+    fn test_pipeline_with_echo_transform() {
+        let source = r#"
+            (+ 1 2)
+        "#;
+
+        let mut registry = TransformRegistry::new();
+        registry.register(Box::new(EchoTransform::new()));
+        let result = compile_lisp(source, registry).unwrap();
+
+        // Echo transform should not affect output
+        assert!(result.contains("(1 + 2)"));
+    }
+
+    #[test]
+    fn test_pipeline_transform_preserves_semantics() {
+        let source = r#"
+            (defmacro double (x) `(* ,x 2))
+            (double 21)
+        "#;
+
+        // Test with no transforms
+        let registry1 = TransformRegistry::new();
+        let result1 = compile_lisp(source, registry1).unwrap();
+
+        // Test with echo transform
+        let mut registry2 = TransformRegistry::new();
+        registry2.register(Box::new(EchoTransform::new()));
+        let result2 = compile_lisp(source, registry2).unwrap();
+
+        // Results should be identical
+        assert_eq!(result1, result2);
     }
 }

@@ -42,6 +42,14 @@ The result is a unique language perfect for AI agents, rapid prototyping, and sy
 - **Recursion Control** - Configurable depth limits prevent infinite macro expansion loops ✅
 - **Code-as-Data** - Homoiconic design for AI agent manipulation
 
+### AST Transformation System
+- **Plugin Architecture** - Extensible transform system for AI agents and code analysis tools ✅
+- **Transform Pipeline** - Execute transforms between parsing and macro expansion ✅
+- **Echo Transform** - Built-in debugging transform for AST visualization ✅
+- **CLI Integration** - `--transforms` flag for applying transforms during compilation ✅
+- **Error Handling** - Comprehensive error reporting for transform failures ✅
+- **Composability** - Chain multiple transforms for complex code manipulations ✅
+
 > 📍 **Status**: Phase 1.2 (Macro Expansion Engine) - Recursive expansion ✅ complete. The macro system now features robust recursive expansion with configurable depth limits, preventing infinite expansion loops while supporting complex nested macro patterns. See [GitHub Issues](https://github.com/justin4957/rusty-lisp/issues) for implementation progress.
 
 
@@ -72,6 +80,12 @@ Create a Lisp file (`example.lisp`):
 Compile to Rust:
 ```bash
 cargo run example.lisp > output.rs
+```
+
+With AST transforms:
+```bash
+# Apply transforms during compilation
+cargo run -- --transforms echo example.lisp > output.rs
 ```
 
 Compile and run the generated Rust:
@@ -166,6 +180,55 @@ rustc output.rs -o program && ./program
 (quasiquote (list (unquote-splicing numbers)))  ; Splice longhand
 ```
 
+### AST Transformation Hooks
+
+The compiler includes a plugin system for transforming the AST before macro expansion:
+
+```bash
+# Apply echo transform for AST debugging
+cargo run -- --transforms echo example.lisp
+
+# Chain multiple transforms (future)
+cargo run -- --transforms logging,optimization example.lisp
+```
+
+#### Built-in Transforms
+- **echo** - Print AST structure for debugging and inspection
+
+#### Creating Custom Transforms
+
+```rust
+use crate::ast::LispExpr;
+use crate::transform::{ASTTransform, TransformError};
+
+struct MyTransform;
+
+impl ASTTransform for MyTransform {
+    fn name(&self) -> &str {
+        "my_transform"
+    }
+
+    fn transform(&self, ast: &mut LispExpr) -> Result<(), TransformError> {
+        // Modify AST here
+        // Example: double all numbers
+        match ast {
+            LispExpr::Number(n) => {
+                *n *= 2.0;
+                Ok(())
+            }
+            _ => Ok(())
+        }
+    }
+}
+```
+
+Transforms enable:
+- **AI Agent Refactoring** - Automated code restructuring
+- **Code Instrumentation** - Add logging, metrics, debugging
+- **Optimization** - Constant folding, dead code elimination
+- **Style Enforcement** - Naming conventions, formatting
+- **Security Scanning** - Pattern detection, vulnerability checking
+
 ## Examples
 
 ### Basic Arithmetic
@@ -217,8 +280,14 @@ The `LispExpr` enum supports:
 
 ### Current Pipeline
 ```
-Source → Lexer → Parser → Macro Expander → Compiler → Rust Code
+Source → Lexer → Parser → [AST Transforms] → Macro Expander → Compiler → Rust Code
 ```
+
+The AST transform phase (Phase 1.5.2) allows plugins to modify the AST before macro expansion:
+- **Transform Registry**: Manage multiple transform plugins
+- **Ordered Execution**: Transforms applied in registration order
+- **AI Integration**: Direct AST manipulation for refactoring, optimization, and instrumentation
+- **Custom Transforms**: Implement `ASTTransform` trait for custom code transformations
 
 The macro expansion phase features:
 - **Registration**: Captures macro definitions from `defmacro` forms
