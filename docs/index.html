@@ -41,6 +41,7 @@
                     <ul class="sidebar-subnav">
                         <li><a href="#lexer" class="sidebar-subnav-link">Lexer</a></li>
                         <li><a href="#parser" class="sidebar-subnav-link">Parser</a></li>
+                        <li><a href="#transform" class="sidebar-subnav-link">Transform</a></li>
                         <li><a href="#compiler" class="sidebar-subnav-link">Compiler</a></li>
                     </ul>
                 </li>
@@ -88,7 +89,10 @@
                     <div class="feature-card">
                         <h3>🔧 Macro System</h3>
                         <p>Complete macro infrastructure: defmacro with &rest parameters, quote family, comprehensive error handling with actionable messages, pipeline-integrated expansion engine, and automatic hygiene</p>
-
+                    </div>
+                    <div class="feature-card">
+                        <h3>🔌 AST Transform Hooks</h3>
+                        <p>Extensible plugin system for AST manipulation between parsing and macro expansion. Perfect for AI agents, refactoring tools, and code instrumentation</p>
                     </div>
                 </div>
             </section>
@@ -120,6 +124,9 @@ cargo build --release</code></pre>
                 <div class="code-block">
                     <pre><code class="language-bash"># Compile to Rust
 cargo run example.lisp &gt; output.rs
+
+# With AST transforms
+cargo run -- --transforms echo example.lisp &gt; output.rs
 
 # Compile and run
 rustc output.rs -o program && ./program</code></pre>
@@ -475,6 +482,77 @@ custom-func</code></pre>
                         <li>Validation and clear error messages for pattern mismatches</li>
                         <li>Infinite recursion prevention via depth limits</li>
                     </ul>
+                </div>
+
+                <h3 id="transform">Transform Module</h3>
+                <div class="api-section">
+                    <h4><code>ASTTransform trait</code></h4>
+                    <p>Trait for implementing AST transformation plugins. Transforms are applied between parsing and macro expansion, enabling powerful code manipulations.</p>
+
+                    <h5>Methods</h5>
+                    <ul>
+                        <li><code>fn name(&self) -> &str</code> - Returns the transform name</li>
+                        <li><code>fn transform(&self, ast: &mut LispExpr) -> Result&lt;(), TransformError&gt;</code> - Applies transformation to AST</li>
+                    </ul>
+
+                    <h4><code>TransformRegistry</code></h4>
+                    <p>Manages and applies multiple transform plugins in sequence.</p>
+
+                    <h5>Methods</h5>
+                    <ul>
+                        <li><code>new() -> TransformRegistry</code> - Creates empty registry</li>
+                        <li><code>register(&mut self, transform: Box&lt;dyn ASTTransform&gt;)</code> - Registers a transform plugin</li>
+                        <li><code>apply_all(&self, ast: &mut LispExpr) -> Result&lt;(), TransformError&gt;</code> - Applies all transforms in order</li>
+                        <li><code>count(&self) -> usize</code> - Returns number of registered transforms</li>
+                        <li><code>transform_names(&self) -> Vec&lt;String&gt;</code> - Returns names of all transforms</li>
+                    </ul>
+
+                    <h4><code>EchoTransform</code></h4>
+                    <p>Built-in transform that prints AST structure for debugging without modifying the AST.</p>
+
+                    <h5>Usage</h5>
+                    <div class="code-block">
+                        <pre><code class="language-bash">cargo run -- --transforms echo example.lisp</code></pre>
+                    </div>
+
+                    <h5>Use Cases</h5>
+                    <ul>
+                        <li><strong>AI Agent Refactoring</strong> - Automated code restructuring and optimization</li>
+                        <li><strong>Code Instrumentation</strong> - Add logging, metrics, or debugging statements</li>
+                        <li><strong>Optimization</strong> - Constant folding, dead code elimination</li>
+                        <li><strong>Style Enforcement</strong> - Naming conventions, formatting rules</li>
+                        <li><strong>Security Scanning</strong> - Pattern detection, vulnerability checking</li>
+                    </ul>
+
+                    <h5>Example Custom Transform</h5>
+                    <div class="code-block">
+                        <pre><code class="language-rust">use crate::ast::LispExpr;
+use crate::transform::{ASTTransform, TransformError};
+
+struct DoubleNumberTransform;
+
+impl ASTTransform for DoubleNumberTransform {
+    fn name(&self) -> &str {
+        "double"
+    }
+
+    fn transform(&self, ast: &mut LispExpr) -> Result&lt;(), TransformError&gt; {
+        match ast {
+            LispExpr::Number(n) => {
+                *n *= 2.0;
+                Ok(())
+            }
+            LispExpr::List(items) => {
+                for item in items.iter_mut() {
+                    self.transform(item)?;
+                }
+                Ok(())
+            }
+            _ => Ok(())
+        }
+    }
+}</code></pre>
+                    </div>
                 </div>
 
                 <h3 id="compiler">Compiler Module</h3>
