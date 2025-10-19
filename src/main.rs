@@ -4,6 +4,7 @@ mod compiler;
 mod ast;
 mod macro_expander;
 mod transform;
+mod validator;
 
 use std::env;
 use std::fs;
