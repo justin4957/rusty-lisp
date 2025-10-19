@@ -121,10 +121,10 @@ impl MacroExpander {
 - **Tool Integration**: External analysis and transformation tools
 
 ### Deliverables:
-- [ ] JSON AST serialization/deserialization
-- [ ] CLI flag: `--from-ir example.ir.json`
-- [ ] Round-trip validation (Lisp → JSON → Lisp)
-- [ ] JSON schema documentation
+- [x] JSON AST serialization/deserialization ✅ **COMPLETED** - [Issue #13](https://github.com/justin4957/rusty-lisp/issues/13)
+- [x] CLI flag: `--from-ir example.ir.json` and `--to-ir` ✅ **COMPLETED** - [Issue #13](https://github.com/justin4957/rusty-lisp/issues/13)
+- [x] Round-trip validation (Lisp → JSON → Lisp) ✅ **COMPLETED** - [Issue #13](https://github.com/justin4957/rusty-lisp/issues/13)
+- [x] JSON schema documentation ✅ **COMPLETED** - [Issue #13](https://github.com/justin4957/rusty-lisp/issues/13)
 
 ## 1.5.2 AST Transformation Hooks
 

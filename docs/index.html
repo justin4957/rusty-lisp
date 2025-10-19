@@ -37,6 +37,9 @@
                     <a href="#examples" class="sidebar-nav-link">Examples</a>
                 </li>
                 <li class="sidebar-nav-item">
+                    <a href="#json-ir" class="sidebar-nav-link">JSON IR</a>
+                </li>
+                <li class="sidebar-nav-item">
                     <a href="#api-reference" class="sidebar-nav-link">API Reference</a>
                     <ul class="sidebar-subnav">
                         <li><a href="#lexer" class="sidebar-subnav-link">Lexer</a></li>
@@ -94,6 +97,10 @@
                         <h3>🔌 AST Transform Hooks</h3>
                         <p>Extensible plugin system for AST manipulation between parsing and macro expansion. Perfect for AI agents, refactoring tools, and code instrumentation</p>
                     </div>
+                    <div class="feature-card">
+                        <h3>📊 JSON Intermediate Representation</h3>
+                        <p>Full JSON serialization/deserialization of AST. AI-friendly format for LLM code generation, external tooling, and round-trip transformations</p>
+                    </div>
                 </div>
             </section>
 
@@ -127,6 +134,12 @@ cargo run example.lisp &gt; output.rs
 
 # With AST transforms
 cargo run -- --transforms echo example.lisp &gt; output.rs
+
+# Convert to JSON IR
+cargo run -- --to-ir example.lisp &gt; example.ir.json
+
+# Compile JSON IR to Rust
+cargo run -- --from-ir example.ir.json &gt; output.rs
 
 # Compile and run
 rustc output.rs -o program && ./program</code></pre>
@@ -407,6 +420,94 @@ custom-func</code></pre>
 (quasiquote (list (unquote-splicing items)))</code></pre>
                         </div>
                         <p><em>Both shorthand and longhand forms supported</em></p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="json-ir" class="content-section">
+                <h2>JSON Intermediate Representation</h2>
+                <p>The compiler supports JSON serialization and deserialization of the AST, providing an AI-friendly format for code generation and manipulation.</p>
+
+                <h3>Benefits for AI Agents</h3>
+                <ul>
+                    <li><strong>Easier Generation:</strong> LLMs excel at producing valid JSON vs. Lisp syntax</li>
+                    <li><strong>Error Reduction:</strong> Structured data reduces parsing failures</li>
+                    <li><strong>Tool Integration:</strong> External analysis and transformation tools can work with JSON</li>
+                    <li><strong>Debugging:</strong> Human-readable JSON format for AST inspection</li>
+                </ul>
+
+                <h3>JSON Format</h3>
+                <p>The AST is serialized using serde's default enum representation. Each variant is represented as an object with a single key:</p>
+
+                <div class="example-card">
+                    <h4>Simple Expression</h4>
+                    <div class="code-block">
+                        <pre><code class="language-lisp">; Lisp input
+(+ 1 2)</code></pre>
+                    </div>
+                    <div class="code-block">
+                        <pre><code class="language-json">// JSON IR output
+[
+  {
+    "List": [
+      { "Symbol": "+" },
+      { "Number": 1.0 },
+      { "Number": 2.0 }
+    ]
+  }
+]</code></pre>
+                    </div>
+                </div>
+
+                <h3>Supported AST Variants</h3>
+                <div class="api-section">
+                    <ul>
+                        <li><strong>Atoms:</strong> <code>{"Number": 42.0}</code>, <code>{"Symbol": "foo"}</code>, <code>{"String": "hello"}</code>, <code>{"Bool": true}</code>, <code>"Nil"</code></li>
+                        <li><strong>Lists:</strong> <code>{"List": [...]}</code></li>
+                        <li><strong>Macros:</strong> <code>{"Macro": {"name": "...", "parameters": [...], "body": {...}}}</code></li>
+                        <li><strong>Quote Family:</strong> <code>{"Quote": {...}}</code>, <code>{"Quasiquote": {...}}</code>, <code>{"Unquote": {...}}</code>, <code>{"Splice": {...}}</code></li>
+                        <li><strong>Hygiene:</strong> <code>{"Gensym": "unique_123"}</code></li>
+                    </ul>
+                </div>
+
+                <h3>Round-trip Example</h3>
+                <div class="code-block">
+                    <pre><code class="language-bash"># 1. Convert Lisp to JSON IR
+cargo run -- --to-ir example.lisp &gt; example.ir.json
+
+# 2. Compile JSON IR to Rust
+cargo run -- --from-ir example.ir.json &gt; output.rs
+
+# 3. Run the generated code
+rustc output.rs && ./output</code></pre>
+                </div>
+
+                <div class="example-card">
+                    <h4>Complete Workflow</h4>
+                    <div class="code-block">
+                        <pre><code class="language-bash">$ echo "(+ 1 (* 2 3))" &gt; example.lisp
+
+$ cargo run -- --to-ir example.lisp
+[
+  {
+    "List": [
+      { "Symbol": "+" },
+      { "Number": 1.0 },
+      {
+        "List": [
+          { "Symbol": "*" },
+          { "Number": 2.0 },
+          { "Number": 3.0 }
+        ]
+      }
+    ]
+  }
+]
+
+$ cargo run -- --to-ir example.lisp | cargo run -- --from-ir /dev/stdin
+fn main() {
+    println!("{:?}", (1 + (2 * 3)));
+}</code></pre>
                     </div>
                 </div>
             </section>

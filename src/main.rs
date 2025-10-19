@@ -9,12 +9,15 @@ use std::env;
 use std::fs;
 use std::process;
 use transform::{TransformRegistry, EchoTransform};
+use serde_json;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
 
     let mut input_file: Option<&String> = None;
     let mut transform_names: Vec<String> = Vec::new();
+    let mut from_ir = false;
+    let mut to_ir = false;
 
     let mut i = 1;
     while i < args.len() {
@@ -27,6 +30,12 @@ fn main() {
                 }
                 i += 1;
                 transform_names = args[i].split(',').map(|s| s.trim().to_string()).collect();
+            }
+            "--from-ir" => {
+                from_ir = true;
+            }
+            "--to-ir" => {
+                to_ir = true;
             }
             arg if arg.starts_with("--") => {
                 eprintln!("Error: unknown option '{}'", arg);
@@ -75,11 +84,32 @@ fn main() {
         }
     }
 
-    match compile_lisp(&source_code, registry) {
-        Ok(rust_code) => println!("{}", rust_code),
-        Err(err) => {
-            eprintln!("Compilation error: {}", err);
-            process::exit(1);
+    if from_ir {
+        // Read from JSON IR and compile to Rust
+        match compile_from_ir(&source_code, registry) {
+            Ok(rust_code) => println!("{}", rust_code),
+            Err(err) => {
+                eprintln!("Compilation error: {}", err);
+                process::exit(1);
+            }
+        }
+    } else if to_ir {
+        // Compile to JSON IR
+        match compile_to_ir(&source_code, registry) {
+            Ok(json_ir) => println!("{}", json_ir),
+            Err(err) => {
+                eprintln!("Compilation error: {}", err);
+                process::exit(1);
+            }
+        }
+    } else {
+        // Normal compilation to Rust
+        match compile_lisp(&source_code, registry) {
+            Ok(rust_code) => println!("{}", rust_code),
+            Err(err) => {
+                eprintln!("Compilation error: {}", err);
+                process::exit(1);
+            }
         }
     }
 }
@@ -90,9 +120,13 @@ fn print_usage(program_name: &str) {
     eprintln!("Options:");
     eprintln!("  --transforms <list>  Comma-separated list of transforms to apply");
     eprintln!("                       Available: echo");
+    eprintln!("  --from-ir            Read JSON IR as input instead of Lisp source");
+    eprintln!("  --to-ir              Output JSON IR instead of Rust code");
     eprintln!();
-    eprintln!("Example:");
-    eprintln!("  {} --transforms echo,optimization example.lisp", program_name);
+    eprintln!("Examples:");
+    eprintln!("  {} example.lisp                     # Compile Lisp to Rust", program_name);
+    eprintln!("  {} --to-ir example.lisp > out.json  # Convert Lisp to JSON IR", program_name);
+    eprintln!("  {} --from-ir out.json               # Compile JSON IR to Rust", program_name);
 }
 
 fn compile_lisp(source: &str, registry: TransformRegistry) -> Result<String, String> {
@@ -122,6 +156,48 @@ fn compile_lisp(source: &str, registry: TransformRegistry) -> Result<String, Str
     }
 
     let rust_code = compiler::compile_to_rust(&expanded_ast)?;
+    Ok(rust_code)
+}
+
+fn compile_to_ir(source: &str, registry: TransformRegistry) -> Result<String, String> {
+    let tokens = lexer::tokenize(source)?;
+    let ast = parser::parse(tokens)?;
+
+    // Apply AST transformations
+    let mut transformed_ast = Vec::new();
+    for mut expr in ast {
+        registry.apply_all(&mut expr)
+            .map_err(|e| format!("Transform error: {}", e))?;
+        transformed_ast.push(expr);
+    }
+
+    // Expand macros
+    let mut expander = macro_expander::MacroExpander::new();
+    let mut expanded_ast = Vec::new();
+
+    for expr in transformed_ast {
+        let expanded = expander.expand_all(expr)
+            .map_err(|e| format!("Macro expansion error: {}", e))?;
+
+        // Skip Nil expressions (from macro definitions)
+        if !matches!(expanded, ast::LispExpr::Nil) {
+            expanded_ast.push(expanded);
+        }
+    }
+
+    // Serialize to JSON
+    serde_json::to_string_pretty(&expanded_ast)
+        .map_err(|e| format!("JSON serialization error: {}", e))
+}
+
+fn compile_from_ir(json_source: &str, _registry: TransformRegistry) -> Result<String, String> {
+    // Deserialize JSON IR to AST
+    let ast: Vec<ast::LispExpr> = serde_json::from_str(json_source)
+        .map_err(|e| format!("JSON deserialization error: {}", e))?;
+
+    // Note: Transforms and macro expansion are already applied in IR
+    // Just compile to Rust
+    let rust_code = compiler::compile_to_rust(&ast)?;
     Ok(rust_code)
 }
 
