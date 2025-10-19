@@ -40,10 +40,14 @@
                     <a href="#json-ir" class="sidebar-nav-link">JSON IR</a>
                 </li>
                 <li class="sidebar-nav-item">
+                    <a href="#validation" class="sidebar-nav-link">AST Validation</a>
+                </li>
+                <li class="sidebar-nav-item">
                     <a href="#api-reference" class="sidebar-nav-link">API Reference</a>
                     <ul class="sidebar-subnav">
                         <li><a href="#lexer" class="sidebar-subnav-link">Lexer</a></li>
                         <li><a href="#parser" class="sidebar-subnav-link">Parser</a></li>
+                        <li><a href="#validator-api" class="sidebar-subnav-link">Validator</a></li>
                         <li><a href="#transform" class="sidebar-subnav-link">Transform</a></li>
                         <li><a href="#compiler" class="sidebar-subnav-link">Compiler</a></li>
                     </ul>
@@ -100,6 +104,10 @@
                     <div class="feature-card">
                         <h3>📊 JSON Intermediate Representation</h3>
                         <p>Full JSON serialization/deserialization of AST. AI-friendly format for LLM code generation, external tooling, and round-trip transformations</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>🛡️ AST Validation Engine</h3>
+                        <p>Comprehensive safety validation with type checking, resource bounds analysis, FFI restrictions, and complexity limits. Critical for ensuring AI-generated code is safe before execution</p>
                     </div>
                 </div>
             </section>
@@ -512,6 +520,126 @@ fn main() {
                 </div>
             </section>
 
+            <section id="validation" class="content-section">
+                <h2>AST Validation Engine</h2>
+                <p>The validation engine provides comprehensive safety checks for AST structures before compilation. This is especially critical for AI-generated code to prevent common errors and unsafe operations.</p>
+
+                <h3>Validation Rules</h3>
+                <div class="api-section">
+                    <h4>Type Safety</h4>
+                    <p>Detects type mismatches in operations (e.g., adding strings to numbers).</p>
+                    <div class="code-block">
+                        <pre><code class="language-lisp">; Invalid - will fail validation
+(+ "hello" 42)
+
+; Error: Type mismatch: arithmetic operation '+' requires numeric operands, got String</code></pre>
+                    </div>
+
+                    <h4>Resource Bounds</h4>
+                    <p>Catches infinite loops and unbounded recursion patterns.</p>
+                    <div class="code-block">
+                        <pre><code class="language-lisp">; Invalid - obvious infinite recursion
+(define (infinite-loop) (infinite-loop))
+
+; Error: Infinite recursion detected: function 'infinite-loop' calls itself
+;        without any conditional base case</code></pre>
+                    </div>
+
+                    <h4>FFI Restrictions</h4>
+                    <p>Controls access to unsafe Rust operations and FFI calls.</p>
+                    <div class="code-block">
+                        <pre><code class="language-lisp">; Invalid - unsafe operation not allowed
+(rust-unsafe "std::ptr::null()")
+
+; Error: FFI restriction: unsafe operation 'rust-unsafe' is not allowed</code></pre>
+                    </div>
+
+                    <h4>Complexity Limits</h4>
+                    <p>Prevents overly complex AST structures by limiting nesting depth.</p>
+                    <div class="code-block">
+                        <pre><code class="language-lisp">; Invalid if nesting exceeds configured limit
+(+ (+ (+ (+ (+ ... ))))) ; too deeply nested</code></pre>
+                    </div>
+                </div>
+
+                <h3>Usage</h3>
+                <p>Enable validation with the <code>--validate-safety</code> CLI flag:</p>
+                <div class="code-block">
+                    <pre><code class="language-bash"># Compile with validation enabled
+cargo run -- --validate-safety example.lisp &gt; output.rs</code></pre>
+                </div>
+
+                <h3>Validation in the Pipeline</h3>
+                <p>Validation runs <strong>before macro expansion</strong> in the compilation pipeline:</p>
+                <div class="code-block">
+                    <pre><code>Source → Parse → Transform → [VALIDATE] → Macro Expand → Compile → Rust</code></pre>
+                </div>
+
+                <div class="api-section">
+                    <p>This ensures that:</p>
+                    <ul>
+                        <li>Invalid code is caught early, before expensive macro expansion</li>
+                        <li>Error messages reference the original source code structure</li>
+                        <li>AI-generated code is verified for safety before execution</li>
+                        <li>Multiple validation errors are reported together for efficient debugging</li>
+                    </ul>
+                </div>
+
+                <h3>Why Validation Matters for AI</h3>
+                <p>AI-generated code can contain subtle errors that are syntactically correct but semantically invalid:</p>
+                <div class="api-section">
+                    <ul>
+                        <li><strong>Type errors:</strong> LLMs may mix incompatible types in operations</li>
+                        <li><strong>Infinite loops:</strong> Generated recursive functions may lack base cases</li>
+                        <li><strong>Unsafe operations:</strong> AI may attempt to generate unsafe Rust code</li>
+                        <li><strong>Complex structures:</strong> Generated code may exceed reasonable complexity bounds</li>
+                    </ul>
+                    <p>The validation engine catches these issues <strong>before compilation</strong>, providing a crucial safety layer for AI-first workflows.</p>
+                </div>
+
+                <h3>Example: Valid vs. Invalid Code</h3>
+                <div class="example-card">
+                    <h4>Valid Code - Passes Validation</h4>
+                    <div class="code-block">
+                        <pre><code class="language-bash">$ cat example.lisp
+(+ 1 (* 2 3))
+
+$ cargo run -- --validate-safety example.lisp
+fn main() {
+    println!("{:?}", (1 + (2 * 3)));
+}</code></pre>
+                    </div>
+                </div>
+
+                <div class="example-card">
+                    <h4>Invalid Code - Fails Validation</h4>
+                    <div class="code-block">
+                        <pre><code class="language-bash">$ cat invalid.lisp
+(+ "string" 42)
+
+$ cargo run -- --validate-safety invalid.lisp
+Compilation error: Validation failed with 1 error(s):
+  - TypeSafety violation: Type mismatch: arithmetic operation '+'
+    requires numeric operands, got String
+    Context: String("string")</code></pre>
+                    </div>
+                </div>
+
+                <h3>Composable Validator Architecture</h3>
+                <p>The validation system uses a plugin architecture that allows combining multiple validation rules:</p>
+                <div class="code-block">
+                    <pre><code class="language-rust">// Validators can be composed
+let composite_validator = CompositeValidator::new()
+    .add_validator(Box::new(TypeSafetyValidator::new()))
+    .add_validator(Box::new(ResourceBoundsValidator::new()))
+    .add_validator(Box::new(FFIRestrictionsValidator::new()))
+    .add_validator(Box::new(ComplexityLimitsValidator::new()));
+
+// Run all validators
+composite_validator.validate_all(&ast)?;</code></pre>
+                </div>
+            </section>
+
             <section id="api-reference" class="content-section">
                 <h2>API Reference</h2>
 
@@ -582,6 +710,72 @@ fn main() {
                         <li>Quasiquote/unquote/splice operations</li>
                         <li>Validation and clear error messages for pattern mismatches</li>
                         <li>Infinite recursion prevention via depth limits</li>
+                    </ul>
+                </div>
+
+                <h3 id="validator-api">Validator Module</h3>
+                <div class="api-section">
+                    <h4><code>ASTValidator trait</code></h4>
+                    <p>Trait for implementing composable validation rules. Validators check AST structures for safety issues before compilation.</p>
+
+                    <h5>Methods</h5>
+                    <ul>
+                        <li><code>fn validate(&self, expr: &LispExpr) -> ValidationResult</code> - Validates an AST expression</li>
+                        <li><code>fn enabled_rules(&self) -> Vec&lt;ValidationRule&gt;</code> - Returns enabled validation rules</li>
+                    </ul>
+
+                    <h4><code>ValidationRule enum</code></h4>
+                    <p>Defines the types of validation checks available:</p>
+                    <ul>
+                        <li><code>TypeSafety</code> - Basic type inference and type checking</li>
+                        <li><code>ResourceBounds</code> - Infinite loop and unbounded recursion detection</li>
+                        <li><code>FFIRestrictions</code> - Unsafe Rust operation control</li>
+                        <li><code>ComplexityLimits</code> - AST complexity and nesting depth limits</li>
+                    </ul>
+
+                    <h4>Built-in Validators</h4>
+                    <ul>
+                        <li><code>TypeSafetyValidator</code> - Checks for type mismatches in operations</li>
+                        <li><code>ResourceBoundsValidator</code> - Detects obvious infinite recursion patterns</li>
+                        <li><code>FFIRestrictionsValidator</code> - Restricts access to unsafe operations</li>
+                        <li><code>ComplexityLimitsValidator</code> - Enforces maximum nesting depth</li>
+                        <li><code>CompositeValidator</code> - Combines multiple validators</li>
+                    </ul>
+
+                    <h4><code>ValidationError struct</code></h4>
+                    <p>Represents validation failures with context:</p>
+                    <ul>
+                        <li><code>rule: ValidationRule</code> - Which validation rule failed</li>
+                        <li><code>message: String</code> - Error description</li>
+                        <li><code>context: Option&lt;String&gt;</code> - Additional context about the error</li>
+                    </ul>
+
+                    <h5>Example: Using Validators</h5>
+                    <div class="code-block">
+                        <pre><code class="language-rust">use validator::{CompositeValidator, TypeSafetyValidator};
+
+// Create composite validator
+let validator = CompositeValidator::new()
+    .add_validator(Box::new(TypeSafetyValidator::new()))
+    .add_validator(Box::new(ResourceBoundsValidator::new()));
+
+// Validate AST
+match validator.validate_all(&ast) {
+    Ok(()) => println!("Validation passed"),
+    Err(errors) => {
+        for error in errors {
+            eprintln!("Validation error: {}", error);
+        }
+    }
+}</code></pre>
+                    </div>
+
+                    <h5>Features</h5>
+                    <ul>
+                        <li>Composable validators can be combined for comprehensive checks</li>
+                        <li>Configurable limits (recursion depth, nesting depth, etc.)</li>
+                        <li>FFI allowlists for controlled unsafe operations</li>
+                        <li>Multiple error reporting for efficient debugging</li>
                     </ul>
                 </div>
 
