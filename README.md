@@ -50,7 +50,15 @@ The result is a unique language perfect for AI agents, rapid prototyping, and sy
 - **Error Handling** - Comprehensive error reporting for transform failures ✅
 - **Composability** - Chain multiple transforms for complex code manipulations ✅
 
-> 📍 **Status**: Phase 1.2 (Macro Expansion Engine) - Recursive expansion ✅ complete. The macro system now features robust recursive expansion with configurable depth limits, preventing infinite expansion loops while supporting complex nested macro patterns. See [GitHub Issues](https://github.com/justin4957/rusty-lisp/issues) for implementation progress.
+### JSON Intermediate Representation (IR)
+- **JSON Serialization** - Convert AST to JSON format for AI agents and external tools ✅
+- **Round-trip Support** - Deserialize JSON back to AST without loss of information ✅
+- **CLI Flags** - `--to-ir` outputs JSON IR, `--from-ir` reads JSON IR ✅
+- **AI-Friendly Format** - LLMs excel at generating valid JSON vs. Lisp syntax ✅
+- **Tool Integration** - Enable external analysis, transformation, and code generation tools ✅
+- **All AST Variants** - Complete support for atoms, lists, macros, and quote families ✅
+
+> 📍 **Status**: Phase 1.5.1 (JSON IR) - Complete ✅. The compiler now supports full JSON serialization/deserialization of the AST, enabling AI agents to generate and manipulate code more easily. See [GitHub Issues](https://github.com/justin4957/rusty-lisp/issues) for implementation progress.
 
 
 ## Quick Start
@@ -86,6 +94,15 @@ With AST transforms:
 ```bash
 # Apply transforms during compilation
 cargo run -- --transforms echo example.lisp > output.rs
+```
+
+Using JSON Intermediate Representation:
+```bash
+# Convert Lisp to JSON IR
+cargo run -- --to-ir example.lisp > example.ir.json
+
+# Compile JSON IR to Rust
+cargo run -- --from-ir example.ir.json > output.rs
 ```
 
 Compile and run the generated Rust:
@@ -228,6 +245,76 @@ Transforms enable:
 - **Optimization** - Constant folding, dead code elimination
 - **Style Enforcement** - Naming conventions, formatting
 - **Security Scanning** - Pattern detection, vulnerability checking
+
+### JSON Intermediate Representation
+
+The compiler supports JSON serialization/deserialization of the AST, providing an AI-friendly format for code generation and manipulation.
+
+#### Benefits for AI Agents
+- **Easier Generation**: LLMs excel at producing valid JSON vs. Lisp syntax
+- **Error Reduction**: Structured data reduces parsing failures
+- **Tool Integration**: External analysis and transformation tools can work with JSON
+- **Debugging**: Human-readable JSON format for AST inspection
+
+#### Usage
+
+Convert Lisp to JSON IR:
+```bash
+cargo run -- --to-ir example.lisp > example.ir.json
+```
+
+Compile JSON IR to Rust:
+```bash
+cargo run -- --from-ir example.ir.json > output.rs
+```
+
+#### JSON Format
+
+The AST is serialized using serde's default enum representation. Each variant is represented as an object with a single key:
+
+```json
+[
+  {
+    "List": [
+      {
+        "Symbol": "+"
+      },
+      {
+        "Number": 1.0
+      },
+      {
+        "Number": 2.0
+      }
+    ]
+  }
+]
+```
+
+All AST variants are supported:
+- **Atoms**: `{"Number": 42.0}`, `{"Symbol": "foo"}`, `{"String": "hello"}`, `{"Bool": true}`, `"Nil"`
+- **Lists**: `{"List": [...]}`
+- **Macros**: `{"Macro": {"name": "...", "parameters": [...], "body": {...}}}`
+- **Quote Family**: `{"Quote": {...}}`, `{"Quasiquote": {...}}`, `{"Unquote": {...}}`, `{"Splice": {...}}`
+- **Hygiene**: `{"Gensym": "unique_123"}`
+
+#### Round-trip Example
+
+```bash
+# 1. Original Lisp code
+echo "(+ 1 (* 2 3))" > example.lisp
+
+# 2. Convert to JSON IR
+cargo run -- --to-ir example.lisp > example.ir.json
+# Output: [{"List": [{"Symbol": "+"}, {"Number": 1.0}, {"List": [{"Symbol": "*"}, {"Number": 2.0}, {"Number": 3.0}]}]}]
+
+# 3. Compile JSON IR to Rust
+cargo run -- --from-ir example.ir.json > output.rs
+# Output: fn main() { println!("{:?}", (1 + (2 * 3))); }
+
+# 4. Run the Rust code
+rustc output.rs && ./output
+# Output: 7
+```
 
 ## Examples
 
