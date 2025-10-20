@@ -254,10 +254,10 @@ pub enum ValidationRule {
 - **API Boundaries**: Safe subset of Rust standard library
 
 ### Deliverables:
-- [ ] Sandbox runtime environment
-- [ ] Capability permission system
-- [ ] Resource monitoring and limits
-- [ ] Safe API surface definition
+- [x] Sandbox runtime environment ✅ **COMPLETED** - [Issue #16](https://github.com/justin4957/rusty-lisp/issues/16)
+- [x] Capability permission system ✅ **COMPLETED** - [Issue #16](https://github.com/justin4957/rusty-lisp/issues/16)
+- [x] Resource monitoring and limits ✅ **COMPLETED** - [Issue #16](https://github.com/justin4957/rusty-lisp/issues/16)
+- [x] Safe API surface definition ✅ **COMPLETED** - [Issue #16](https://github.com/justin4957/rusty-lisp/issues/16)
 
 ---
 
