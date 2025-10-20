@@ -109,6 +109,10 @@
                         <h3>🛡️ AST Validation Engine</h3>
                         <p>Comprehensive safety validation with type checking, resource bounds analysis, FFI restrictions, and complexity limits. Critical for ensuring AI-generated code is safe before execution</p>
                     </div>
+                    <div class="feature-card">
+                        <h3>🔒 Sandbox Environment</h3>
+                        <p>Secure execution environment with capability-based security, resource limits, and runtime monitoring. Provides defense-in-depth for running untrusted AI-generated code safely</p>
+                    </div>
                 </div>
             </section>
 
@@ -148,6 +152,16 @@ cargo run -- --to-ir example.lisp &gt; example.ir.json
 
 # Compile JSON IR to Rust
 cargo run -- --from-ir example.ir.json &gt; output.rs
+
+# With validation (recommended for AI-generated code)
+cargo run -- --validate-safety example.lisp &gt; output.rs
+
+# With sandbox (secure AI code execution)
+cargo run -- --sandbox-mode example.lisp &gt; output.rs
+cargo run -- --sandbox-mode --max-memory=100MB --timeout=30s example.lisp
+
+# Maximum security: validation + sandbox
+cargo run -- --sandbox-mode --validate-safety example.lisp
 
 # Compile and run
 rustc output.rs -o program && ./program</code></pre>
@@ -637,6 +651,173 @@ let composite_validator = CompositeValidator::new()
 
 // Run all validators
 composite_validator.validate_all(&ast)?;</code></pre>
+                </div>
+            </section>
+
+            <section id="sandbox" class="content-section">
+                <h2>Sandbox Environment</h2>
+                <p>The sandbox provides a controlled execution environment for AI-generated code with capability-based security and resource limits. This is crucial for safely running untrusted code from AI agents.</p>
+
+                <h3>Security Model</h3>
+                <p>The sandbox implements four layers of defense:</p>
+                <div class="api-section">
+                    <ul>
+                        <li><strong>Capability-based permissions</strong> - Explicit grants for specific operations</li>
+                        <li><strong>Resource monitoring</strong> - Memory and execution time tracking</li>
+                        <li><strong>Safe API surface</strong> - Whitelist of allowed Rust standard library functions</li>
+                        <li><strong>Violation detection</strong> - Runtime checks for security boundary breaches</li>
+                    </ul>
+                </div>
+
+                <h3>Configuration</h3>
+                <p>The sandbox is configured via the <code>SandboxConfig</code> struct:</p>
+                <div class="code-block">
+                    <pre><code class="language-rust">pub struct SandboxConfig {
+    max_memory: usize,                    // Maximum memory in bytes
+    max_execution_time: Duration,         // Maximum execution time
+    allowed_file_paths: Vec&lt;PathBuf&gt;,     // Permitted file paths
+    permitted_network_access: bool,       // Network access flag
+    safe_rust_apis: HashSet&lt;String&gt;,      // Allowed API whitelist
+    capabilities: HashSet&lt;Capability&gt;,    // Granted capabilities
+}</code></pre>
+                </div>
+
+                <h3>Capabilities</h3>
+                <p>Fine-grained permissions for specific operations:</p>
+                <div class="code-block">
+                    <pre><code class="language-rust">pub enum Capability {
+    FileRead(PathBuf),      // Read from specific path
+    FileWrite(PathBuf),     // Write to specific path
+    NetworkHTTP,            // HTTP network requests
+    SystemTime,             // Access system time
+    ProcessSpawn,           // Spawn child processes
+    UnsafeRust,            // Use unsafe Rust features
+}</code></pre>
+                </div>
+
+                <h3>CLI Usage</h3>
+                <div class="code-block">
+                    <pre><code class="language-bash"># Enable sandbox with default settings (100MB, 30s timeout)
+cargo run -- --sandbox-mode example.lisp
+
+# Configure resource limits
+cargo run -- --sandbox-mode --max-memory=50MB --timeout=10s example.lisp
+cargo run -- --sandbox-mode --max-memory=1GB --timeout=5m example.lisp
+
+# Grant specific capabilities
+cargo run -- --sandbox-mode --allow-capability=FileRead:/tmp/data example.lisp
+cargo run -- --sandbox-mode --allow-capability=FileWrite:/tmp/output example.lisp
+cargo run -- --sandbox-mode --allow-capability=NetworkHTTP example.lisp
+
+# Multiple capabilities
+cargo run -- --sandbox-mode \
+  --allow-capability=FileRead:/tmp \
+  --allow-capability=SystemTime \
+  example.lisp
+
+# Maximum security: sandbox + validation
+cargo run -- --sandbox-mode --validate-safety example.lisp</code></pre>
+                </div>
+
+                <h3>Violation Types</h3>
+                <p>The sandbox detects and reports various security violations:</p>
+                <div class="api-section">
+                    <ul>
+                        <li><strong>MemoryLimitExceeded</strong> - Attempted allocation exceeds configured limit</li>
+                        <li><strong>ExecutionTimeExceeded</strong> - Code execution time exceeds timeout</li>
+                        <li><strong>UnauthorizedFileAccess</strong> - Attempted file access without permission</li>
+                        <li><strong>UnauthorizedNetworkAccess</strong> - Network access without NetworkHTTP capability</li>
+                        <li><strong>UnsafeRustNotPermitted</strong> - Unsafe Rust features without UnsafeRust capability</li>
+                        <li><strong>ProcessSpawnNotPermitted</strong> - Process spawning without ProcessSpawn capability</li>
+                        <li><strong>DisallowedAPIUsage</strong> - Use of API not in safe whitelist</li>
+                        <li><strong>MissingCapability</strong> - Operation requires a capability that wasn't granted</li>
+                    </ul>
+                </div>
+
+                <h3>Safe API Whitelist</h3>
+                <p>Default allowed APIs (extensible):</p>
+                <div class="api-section">
+                    <ul>
+                        <li><strong>Core types:</strong> <code>std::vec::Vec</code>, <code>std::string::String</code>, <code>std::option::Option</code>, <code>std::result::Result</code></li>
+                        <li><strong>Collections:</strong> <code>std::collections::HashMap</code>, <code>std::collections::HashSet</code></li>
+                        <li><strong>I/O:</strong> <code>std::println</code>, <code>std::print</code>, <code>std::format</code></li>
+                        <li><strong>Math:</strong> <code>std::cmp</code>, <code>std::ops</code></li>
+                    </ul>
+                </div>
+
+                <h3>Example: Sandboxed AI Code Execution</h3>
+                <div class="example-card">
+                    <h4>Secure Execution with Minimal Permissions</h4>
+                    <div class="code-block">
+                        <pre><code class="language-bash"># AI generates code that needs file access
+# Grant minimal required capability
+$ cargo run -- --sandbox-mode \
+  --allow-capability=FileRead:/data/input.txt \
+  --max-memory=10MB \
+  --timeout=5s \
+  ai-generated-code.lisp
+
+# If code violates limits, get clear error:
+Error: Memory limit exceeded: limit=10485760 bytes, attempted=15000000 bytes</code></pre>
+                    </div>
+                </div>
+
+                <h3>Why Sandbox Matters for AI</h3>
+                <p>AI-generated code poses unique security risks:</p>
+                <div class="api-section">
+                    <ul>
+                        <li><strong>Unbounded resource usage:</strong> AI may generate code with memory leaks or infinite loops</li>
+                        <li><strong>Unintended file access:</strong> Generated code may access sensitive files</li>
+                        <li><strong>Network operations:</strong> AI code could attempt unauthorized network access</li>
+                        <li><strong>Unsafe operations:</strong> Generated code may try to use unsafe Rust features</li>
+                    </ul>
+                </div>
+
+                <h3>Defense in Depth</h3>
+                <p>The sandbox provides multiple security layers:</p>
+                <div class="api-section">
+                    <ol>
+                        <li>Limit resource consumption (memory, time)</li>
+                        <li>Restrict file system and network access</li>
+                        <li>Enforce safe API usage</li>
+                        <li>Detect and report violations clearly</li>
+                    </ol>
+                    <p>Combined with AST validation, the sandbox creates a <strong>secure-by-default</strong> environment for AI code execution.</p>
+                </div>
+
+                <h3>Sandbox Monitor API</h3>
+                <p>The runtime monitor tracks resource usage and enforces limits:</p>
+                <div class="code-block">
+                    <pre><code class="language-rust">pub struct SandboxMonitor {
+    config: SandboxConfig,
+    start_time: Instant,
+    current_memory: usize,
+}
+
+impl SandboxMonitor {
+    // Check if execution time limit has been exceeded
+    pub fn check_time_limit(&self) -> Result&lt;(), SandboxViolation&gt;;
+
+    // Check if memory limit would be exceeded
+    pub fn check_memory_limit(&self, allocation_size: usize)
+        -> Result&lt;(), SandboxViolation&gt;;
+
+    // Record a memory allocation
+    pub fn allocate_memory(&mut self, size: usize)
+        -> Result&lt;(), SandboxViolation&gt;;
+
+    // Check if file path access is allowed
+    pub fn check_file_access(&self, path: &PathBuf)
+        -> Result&lt;(), SandboxViolation&gt;;
+
+    // Check if a capability is granted
+    pub fn check_capability(&self, capability: &Capability)
+        -> Result&lt;(), SandboxViolation&gt;;
+
+    // Check if an API is allowed
+    pub fn check_api_usage(&self, api: &str)
+        -> Result&lt;(), SandboxViolation&gt;;
+}</code></pre>
                 </div>
             </section>
 
