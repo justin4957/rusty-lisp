@@ -6,6 +6,7 @@ mod macro_expander;
 mod transform;
 mod validator;
 mod sandbox;
+mod visualizer;
 
 use std::env;
 use std::fs;
@@ -27,6 +28,8 @@ fn main() {
     let mut validate_safety = false;
     let mut sandbox_mode = false;
     let mut sandbox_config = sandbox::SandboxConfig::new();
+    let mut ast_dot = false;
+    let mut ast_visual = false;
 
     let mut i = 1;
     while i < args.len() {
@@ -94,6 +97,12 @@ fn main() {
                 });
                 sandbox_config.add_capability(capability);
             }
+            "--ast-dot" => {
+                ast_dot = true;
+            }
+            "--ast-visual" => {
+                ast_visual = true;
+            }
             arg if arg.starts_with("--") => {
                 eprintln!("Error: unknown option '{}'", arg);
                 print_usage(&args[0]);
@@ -141,7 +150,32 @@ fn main() {
         }
     }
 
-    if from_ir {
+    if ast_dot || ast_visual {
+        // Visualization mode - parse AST and output visualization
+        let tokens = match lexer::tokenize(&source_code) {
+            Ok(t) => t,
+            Err(err) => {
+                eprintln!("Lexer error: {}", err);
+                process::exit(1);
+            }
+        };
+
+        let ast = match parser::parse(tokens) {
+            Ok(a) => a,
+            Err(err) => {
+                eprintln!("Parser error: {}", err);
+                process::exit(1);
+            }
+        };
+
+        if ast_dot {
+            let mut viz = visualizer::DotVisualizer::new();
+            println!("{}", viz.visualize(&ast));
+        } else if ast_visual {
+            let viz = visualizer::HtmlVisualizer::new();
+            println!("{}", viz.visualize(&ast));
+        }
+    } else if from_ir {
         // Read from JSON IR and compile to Rust
         match compile_from_ir(&source_code, registry, validate_safety) {
             Ok(rust_code) => println!("{}", rust_code),
@@ -185,6 +219,8 @@ fn print_usage(program_name: &str) {
     eprintln!("  --max-memory <size>         Set maximum memory limit (e.g., 100MB, 1GB)");
     eprintln!("  --timeout <duration>        Set maximum execution time (e.g., 30s, 5m)");
     eprintln!("  --allow-capability <cap>    Grant specific capability (see below)");
+    eprintln!("  --ast-dot                   Output AST as DOT graph (for Graphviz)");
+    eprintln!("  --ast-visual                Output interactive HTML AST visualization");
     eprintln!();
     eprintln!("Capabilities:");
     eprintln!("  FileRead:<path>             Allow reading from specific file path");
@@ -201,6 +237,8 @@ fn print_usage(program_name: &str) {
     eprintln!("  {} --from-ir out.json               # Compile JSON IR to Rust", program_name);
     eprintln!("  {} --sandbox-mode --max-memory=100MB --timeout=30s example.lisp", program_name);
     eprintln!("  {} --sandbox-mode --allow-capability=FileRead:/tmp example.lisp", program_name);
+    eprintln!("  {} --ast-dot example.lisp | dot -Tpng > ast.png  # Visualize AST as PNG", program_name);
+    eprintln!("  {} --ast-visual example.lisp > ast.html         # Interactive HTML visualization", program_name);
 }
 
 fn compile_lisp(source: &str, registry: TransformRegistry, validate_safety: bool) -> Result<String, String> {
