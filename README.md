@@ -68,7 +68,17 @@ The result is a unique language perfect for AI agents, rapid prototyping, and sy
 - **Clear Error Messages** - Actionable validation errors with context ✅
 - **AI Safety** - Critical for validating AI-generated code before execution ✅
 
-> 📍 **Status**: Phase 2.1.1 (AST Validation) - Complete ✅. The compiler now includes comprehensive validation to ensure AI-generated code is safe before compilation. See [GitHub Issues](https://github.com/justin4957/rusty-lisp/issues) for implementation progress.
+### Sandbox Environment
+- **Capability-Based Security** - Fine-grained permission system for AI code execution ✅
+- **Resource Limits** - Configurable memory and execution time constraints ✅
+- **Safe API Surface** - Whitelist approach for Rust standard library APIs ✅
+- **Runtime Monitoring** - Track memory allocation, execution time, and violations ✅
+- **File System Controls** - Restrict file access to approved paths ✅
+- **CLI Integration** - `--sandbox-mode` with configurable limits and capabilities ✅
+- **Violation Detection** - Comprehensive error types for security boundary breaches ✅
+- **AI-Safe Execution** - Controlled environment for running AI-generated code ✅
+
+> 📍 **Status**: Phase 2.1.2 (Sandbox Environment) - Complete ✅. The compiler now includes a secure sandbox environment for controlled execution of AI-generated code. See [GitHub Issues](https://github.com/justin4957/rusty-lisp/issues) for implementation progress.
 
 
 ## Quick Start
@@ -122,6 +132,22 @@ cargo run -- --validate-safety example.lisp > output.rs
 
 # Validation catches errors like type mismatches:
 # Error: (+ "string" 42) -> Type mismatch in arithmetic operation
+```
+
+With sandbox mode (secure AI code execution):
+```bash
+# Run with default strict sandbox settings
+cargo run -- --sandbox-mode example.lisp > output.rs
+
+# Configure memory and execution time limits
+cargo run -- --sandbox-mode --max-memory=100MB --timeout=30s example.lisp
+
+# Grant specific capabilities
+cargo run -- --sandbox-mode --allow-capability=FileRead:/tmp example.lisp
+cargo run -- --sandbox-mode --allow-capability=SystemTime example.lisp
+
+# Combine with validation for maximum security
+cargo run -- --sandbox-mode --validate-safety example.lisp
 ```
 
 Compile and run the generated Rust:
@@ -422,6 +448,125 @@ AI-generated code can contain subtle errors that are syntactically correct but s
 
 The validation engine catches these issues **before compilation**, providing a crucial safety layer for AI-first workflows.
 
+### Sandbox Environment for Secure Code Execution
+
+The sandbox provides a controlled execution environment for AI-generated code with capability-based security and resource limits. This is crucial for safely running untrusted code from AI agents.
+
+#### Security Model
+
+The sandbox implements:
+1. **Capability-based permissions** - Explicit grants for specific operations
+2. **Resource monitoring** - Memory and execution time tracking
+3. **Safe API surface** - Whitelist of allowed Rust standard library functions
+4. **Violation detection** - Runtime checks for security boundary breaches
+
+#### Configuration
+
+```rust
+pub struct SandboxConfig {
+    max_memory: usize,                    // Maximum memory in bytes
+    max_execution_time: Duration,         // Maximum execution time
+    allowed_file_paths: Vec<PathBuf>,     // Permitted file paths
+    permitted_network_access: bool,       // Network access flag
+    safe_rust_apis: HashSet<String>,      // Allowed API whitelist
+    capabilities: HashSet<Capability>,    // Granted capabilities
+}
+```
+
+#### Capabilities
+
+Fine-grained permissions for specific operations:
+
+```rust
+pub enum Capability {
+    FileRead(PathBuf),      // Read from specific path
+    FileWrite(PathBuf),     // Write to specific path
+    NetworkHTTP,            // HTTP network requests
+    SystemTime,             // Access system time
+    ProcessSpawn,           // Spawn child processes
+    UnsafeRust,            // Use unsafe Rust features
+}
+```
+
+#### CLI Usage
+
+```bash
+# Enable sandbox with default settings (100MB, 30s timeout)
+cargo run -- --sandbox-mode example.lisp
+
+# Configure resource limits
+cargo run -- --sandbox-mode --max-memory=50MB --timeout=10s example.lisp
+cargo run -- --sandbox-mode --max-memory=1GB --timeout=5m example.lisp
+
+# Grant specific capabilities
+cargo run -- --sandbox-mode --allow-capability=FileRead:/tmp/data example.lisp
+cargo run -- --sandbox-mode --allow-capability=FileWrite:/tmp/output example.lisp
+cargo run -- --sandbox-mode --allow-capability=NetworkHTTP example.lisp
+cargo run -- --sandbox-mode --allow-capability=SystemTime example.lisp
+
+# Multiple capabilities
+cargo run -- --sandbox-mode \
+  --allow-capability=FileRead:/tmp \
+  --allow-capability=SystemTime \
+  example.lisp
+
+# Maximum security: sandbox + validation
+cargo run -- --sandbox-mode --validate-safety example.lisp
+```
+
+#### Violation Types
+
+The sandbox detects and reports various security violations:
+
+- **MemoryLimitExceeded** - Attempted allocation exceeds configured limit
+- **ExecutionTimeExceeded** - Code execution time exceeds timeout
+- **UnauthorizedFileAccess** - Attempted file access without permission
+- **UnauthorizedNetworkAccess** - Network access without NetworkHTTP capability
+- **UnsafeRustNotPermitted** - Unsafe Rust features without UnsafeRust capability
+- **ProcessSpawnNotPermitted** - Process spawning without ProcessSpawn capability
+- **DisallowedAPIUsage** - Use of API not in safe whitelist
+- **MissingCapability** - Operation requires a capability that wasn't granted
+
+#### Safe API Whitelist
+
+Default allowed APIs (can be extended):
+- Core types: `std::vec::Vec`, `std::string::String`, `std::option::Option`, `std::result::Result`
+- Collections: `std::collections::HashMap`, `std::collections::HashSet`
+- I/O: `std::println`, `std::print`, `std::format`
+- Math: `std::cmp`, `std::ops`
+
+#### Example: Sandboxed AI Code Execution
+
+```bash
+# AI generates code that needs file access
+# Grant minimal required capability
+cargo run -- --sandbox-mode \
+  --allow-capability=FileRead:/data/input.txt \
+  --max-memory=10MB \
+  --timeout=5s \
+  ai-generated-code.lisp
+
+# If code violates limits, get clear error:
+# Error: Memory limit exceeded: limit=10485760 bytes, attempted=15000000 bytes
+```
+
+#### Why Sandbox Matters for AI
+
+AI-generated code poses unique security risks:
+
+- **Unbounded resource usage** - AI may generate code with memory leaks or infinite loops
+- **Unintended file access** - Generated code may access sensitive files
+- **Network operations** - AI code could attempt unauthorized network access
+- **Unsafe operations** - Generated code may try to use unsafe Rust features
+
+The sandbox provides **defense in depth** by:
+1. Limiting resource consumption (memory, time)
+2. Restricting file system and network access
+3. Enforcing safe API usage
+4. Detecting and reporting violations clearly
+
+Combined with AST validation, the sandbox creates a **secure-by-default** environment for AI code execution.
+
 ## Examples
 
 ### Basic Arithmetic
@@ -464,7 +609,8 @@ The compiler follows a traditional compilation pipeline with macro system extens
 4. **Validator** (`src/validator.rs`) - Optional safety validation (type checking, resource bounds, FFI restrictions)
 5. **Macro Expander** (`src/macro_expander.rs`) - Expands macro calls with parameter substitution
 6. **Compiler** (`src/compiler.rs`) - Generates Rust code from expanded AST
-7. **CLI** (`src/main.rs`) - Command-line interface
+7. **Sandbox** (`src/sandbox.rs`) - Secure execution environment with capability-based security
+8. **CLI** (`src/main.rs`) - Command-line interface
 
 ### AST Structure
 The `LispExpr` enum supports:

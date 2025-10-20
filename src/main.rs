@@ -5,6 +5,7 @@ mod ast;
 mod macro_expander;
 mod transform;
 mod validator;
+mod sandbox;
 
 use std::env;
 use std::fs;
@@ -24,6 +25,8 @@ fn main() {
     let mut from_ir = false;
     let mut to_ir = false;
     let mut validate_safety = false;
+    let mut sandbox_mode = false;
+    let mut sandbox_config = sandbox::SandboxConfig::new();
 
     let mut i = 1;
     while i < args.len() {
@@ -45,6 +48,51 @@ fn main() {
             }
             "--validate-safety" => {
                 validate_safety = true;
+            }
+            "--sandbox-mode" => {
+                sandbox_mode = true;
+            }
+            "--max-memory" => {
+                if i + 1 >= args.len() {
+                    eprintln!("Error: --max-memory requires an argument");
+                    print_usage(&args[0]);
+                    process::exit(1);
+                }
+                i += 1;
+                let memory_str = &args[i];
+                let memory_bytes = parse_memory_size(memory_str).unwrap_or_else(|e| {
+                    eprintln!("Error parsing --max-memory: {}", e);
+                    process::exit(1);
+                });
+                sandbox_config = sandbox_config.with_max_memory(memory_bytes);
+            }
+            "--timeout" => {
+                if i + 1 >= args.len() {
+                    eprintln!("Error: --timeout requires an argument");
+                    print_usage(&args[0]);
+                    process::exit(1);
+                }
+                i += 1;
+                let timeout_str = &args[i];
+                let timeout = parse_duration(timeout_str).unwrap_or_else(|e| {
+                    eprintln!("Error parsing --timeout: {}", e);
+                    process::exit(1);
+                });
+                sandbox_config = sandbox_config.with_max_execution_time(timeout);
+            }
+            "--allow-capability" => {
+                if i + 1 >= args.len() {
+                    eprintln!("Error: --allow-capability requires an argument");
+                    print_usage(&args[0]);
+                    process::exit(1);
+                }
+                i += 1;
+                let capability_str = &args[i];
+                let capability = parse_capability(capability_str).unwrap_or_else(|e| {
+                    eprintln!("Error parsing --allow-capability: {}", e);
+                    process::exit(1);
+                });
+                sandbox_config.add_capability(capability);
             }
             arg if arg.starts_with("--") => {
                 eprintln!("Error: unknown option '{}'", arg);
@@ -127,18 +175,32 @@ fn print_usage(program_name: &str) {
     eprintln!("Usage: {} [OPTIONS] <input.lisp>", program_name);
     eprintln!();
     eprintln!("Options:");
-    eprintln!("  --transforms <list>  Comma-separated list of transforms to apply");
-    eprintln!("                       Available: echo");
-    eprintln!("  --from-ir            Read JSON IR as input instead of Lisp source");
-    eprintln!("  --to-ir              Output JSON IR instead of Rust code");
-    eprintln!("  --validate-safety    Enable AST validation (type safety, resource bounds,");
-    eprintln!("                       FFI restrictions, complexity limits)");
+    eprintln!("  --transforms <list>         Comma-separated list of transforms to apply");
+    eprintln!("                              Available: echo");
+    eprintln!("  --from-ir                   Read JSON IR as input instead of Lisp source");
+    eprintln!("  --to-ir                     Output JSON IR instead of Rust code");
+    eprintln!("  --validate-safety           Enable AST validation (type safety, resource bounds,");
+    eprintln!("                              FFI restrictions, complexity limits)");
+    eprintln!("  --sandbox-mode              Enable sandbox execution with security restrictions");
+    eprintln!("  --max-memory <size>         Set maximum memory limit (e.g., 100MB, 1GB)");
+    eprintln!("  --timeout <duration>        Set maximum execution time (e.g., 30s, 5m)");
+    eprintln!("  --allow-capability <cap>    Grant specific capability (see below)");
+    eprintln!();
+    eprintln!("Capabilities:");
+    eprintln!("  FileRead:<path>             Allow reading from specific file path");
+    eprintln!("  FileWrite:<path>            Allow writing to specific file path");
+    eprintln!("  NetworkHTTP                 Allow HTTP network requests");
+    eprintln!("  SystemTime                  Allow accessing system time");
+    eprintln!("  ProcessSpawn                Allow spawning child processes");
+    eprintln!("  UnsafeRust                  Allow using unsafe Rust features");
     eprintln!();
     eprintln!("Examples:");
     eprintln!("  {} example.lisp                     # Compile Lisp to Rust", program_name);
     eprintln!("  {} --validate-safety example.lisp   # Compile with validation", program_name);
     eprintln!("  {} --to-ir example.lisp > out.json  # Convert Lisp to JSON IR", program_name);
     eprintln!("  {} --from-ir out.json               # Compile JSON IR to Rust", program_name);
+    eprintln!("  {} --sandbox-mode --max-memory=100MB --timeout=30s example.lisp", program_name);
+    eprintln!("  {} --sandbox-mode --allow-capability=FileRead:/tmp example.lisp", program_name);
 }
 
 fn compile_lisp(source: &str, registry: TransformRegistry, validate_safety: bool) -> Result<String, String> {
@@ -252,6 +314,79 @@ fn validate_ast(ast: &[ast::LispExpr]) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+/// Parse memory size string (e.g., "100MB", "1GB", "512KB") into bytes
+fn parse_memory_size(s: &str) -> Result<usize, String> {
+    let s = s.trim().to_uppercase();
+
+    // Try to extract number and unit
+    let (num_str, unit) = if let Some(pos) = s.find(|c: char| c.is_alphabetic()) {
+        s.split_at(pos)
+    } else {
+        // No unit specified, assume bytes
+        return s.parse::<usize>()
+            .map_err(|e| format!("Invalid memory size: {}", e));
+    };
+
+    let num: usize = num_str.trim().parse()
+        .map_err(|e| format!("Invalid memory size number: {}", e))?;
+
+    let multiplier = match unit.trim() {
+        "B" => 1,
+        "KB" => 1024,
+        "MB" => 1024 * 1024,
+        "GB" => 1024 * 1024 * 1024,
+        other => return Err(format!("Unknown memory unit: {}", other)),
+    };
+
+    Ok(num * multiplier)
+}
+
+/// Parse duration string (e.g., "30s", "5m", "1h") into Duration
+fn parse_duration(s: &str) -> Result<std::time::Duration, String> {
+    let s = s.trim();
+
+    // Try to extract number and unit
+    let (num_str, unit) = if let Some(pos) = s.find(|c: char| c.is_alphabetic()) {
+        s.split_at(pos)
+    } else {
+        // No unit specified, assume seconds
+        let secs: u64 = s.parse()
+            .map_err(|e| format!("Invalid duration: {}", e))?;
+        return Ok(std::time::Duration::from_secs(secs));
+    };
+
+    let num: u64 = num_str.trim().parse()
+        .map_err(|e| format!("Invalid duration number: {}", e))?;
+
+    match unit.trim() {
+        "s" | "sec" | "secs" => Ok(std::time::Duration::from_secs(num)),
+        "m" | "min" | "mins" => Ok(std::time::Duration::from_secs(num * 60)),
+        "h" | "hour" | "hours" => Ok(std::time::Duration::from_secs(num * 3600)),
+        other => Err(format!("Unknown duration unit: {}", other)),
+    }
+}
+
+/// Parse capability string into Capability enum
+fn parse_capability(s: &str) -> Result<sandbox::Capability, String> {
+    use std::path::PathBuf;
+
+    let s = s.trim();
+
+    if let Some(path_str) = s.strip_prefix("FileRead:") {
+        Ok(sandbox::Capability::FileRead(PathBuf::from(path_str)))
+    } else if let Some(path_str) = s.strip_prefix("FileWrite:") {
+        Ok(sandbox::Capability::FileWrite(PathBuf::from(path_str)))
+    } else {
+        match s {
+            "NetworkHTTP" => Ok(sandbox::Capability::NetworkHTTP),
+            "SystemTime" => Ok(sandbox::Capability::SystemTime),
+            "ProcessSpawn" => Ok(sandbox::Capability::ProcessSpawn),
+            "UnsafeRust" => Ok(sandbox::Capability::UnsafeRust),
+            other => Err(format!("Unknown capability: {}", other)),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -594,5 +729,106 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(result.unwrap().contains("(1 + (2 * 3))"));
+    }
+
+    // Sandbox CLI parsing tests
+
+    #[test]
+    fn test_parse_memory_size_bytes() {
+        assert_eq!(parse_memory_size("1024").unwrap(), 1024);
+        assert_eq!(parse_memory_size("512").unwrap(), 512);
+    }
+
+    #[test]
+    fn test_parse_memory_size_kb() {
+        assert_eq!(parse_memory_size("1KB").unwrap(), 1024);
+        assert_eq!(parse_memory_size("10kb").unwrap(), 10 * 1024);
+        assert_eq!(parse_memory_size("5 KB").unwrap(), 5 * 1024);
+    }
+
+    #[test]
+    fn test_parse_memory_size_mb() {
+        assert_eq!(parse_memory_size("1MB").unwrap(), 1024 * 1024);
+        assert_eq!(parse_memory_size("100mb").unwrap(), 100 * 1024 * 1024);
+        assert_eq!(parse_memory_size("50 MB").unwrap(), 50 * 1024 * 1024);
+    }
+
+    #[test]
+    fn test_parse_memory_size_gb() {
+        assert_eq!(parse_memory_size("1GB").unwrap(), 1024 * 1024 * 1024);
+        assert_eq!(parse_memory_size("2gb").unwrap(), 2 * 1024 * 1024 * 1024);
+    }
+
+    #[test]
+    fn test_parse_memory_size_invalid() {
+        assert!(parse_memory_size("abc").is_err());
+        assert!(parse_memory_size("100XB").is_err());
+        assert!(parse_memory_size("").is_err());
+    }
+
+    #[test]
+    fn test_parse_duration_seconds() {
+        assert_eq!(parse_duration("30s").unwrap(), std::time::Duration::from_secs(30));
+        assert_eq!(parse_duration("5sec").unwrap(), std::time::Duration::from_secs(5));
+        assert_eq!(parse_duration("120").unwrap(), std::time::Duration::from_secs(120));
+    }
+
+    #[test]
+    fn test_parse_duration_minutes() {
+        assert_eq!(parse_duration("5m").unwrap(), std::time::Duration::from_secs(300));
+        assert_eq!(parse_duration("10min").unwrap(), std::time::Duration::from_secs(600));
+        assert_eq!(parse_duration("2mins").unwrap(), std::time::Duration::from_secs(120));
+    }
+
+    #[test]
+    fn test_parse_duration_hours() {
+        assert_eq!(parse_duration("1h").unwrap(), std::time::Duration::from_secs(3600));
+        assert_eq!(parse_duration("2hour").unwrap(), std::time::Duration::from_secs(7200));
+        assert_eq!(parse_duration("3hours").unwrap(), std::time::Duration::from_secs(10800));
+    }
+
+    #[test]
+    fn test_parse_duration_invalid() {
+        assert!(parse_duration("abc").is_err());
+        assert!(parse_duration("100x").is_err());
+        assert!(parse_duration("").is_err());
+    }
+
+    #[test]
+    fn test_parse_capability_simple() {
+        use sandbox::Capability;
+
+        assert_eq!(parse_capability("NetworkHTTP").unwrap(), Capability::NetworkHTTP);
+        assert_eq!(parse_capability("SystemTime").unwrap(), Capability::SystemTime);
+        assert_eq!(parse_capability("ProcessSpawn").unwrap(), Capability::ProcessSpawn);
+        assert_eq!(parse_capability("UnsafeRust").unwrap(), Capability::UnsafeRust);
+    }
+
+    #[test]
+    fn test_parse_capability_file_read() {
+        use sandbox::Capability;
+        use std::path::PathBuf;
+
+        match parse_capability("FileRead:/tmp/test.txt").unwrap() {
+            Capability::FileRead(path) => assert_eq!(path, PathBuf::from("/tmp/test.txt")),
+            _ => panic!("Expected FileRead capability"),
+        }
+    }
+
+    #[test]
+    fn test_parse_capability_file_write() {
+        use sandbox::Capability;
+        use std::path::PathBuf;
+
+        match parse_capability("FileWrite:/var/log").unwrap() {
+            Capability::FileWrite(path) => assert_eq!(path, PathBuf::from("/var/log")),
+            _ => panic!("Expected FileWrite capability"),
+        }
+    }
+
+    #[test]
+    fn test_parse_capability_invalid() {
+        assert!(parse_capability("UnknownCapability").is_err());
+        assert!(parse_capability("").is_err());
     }
 }
