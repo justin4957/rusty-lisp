@@ -58,7 +58,17 @@ The result is a unique language perfect for AI agents, rapid prototyping, and sy
 - **Tool Integration** - Enable external analysis, transformation, and code generation tools ✅
 - **All AST Variants** - Complete support for atoms, lists, macros, and quote families ✅
 
-> 📍 **Status**: Phase 1.5.1 (JSON IR) - Complete ✅. The compiler now supports full JSON serialization/deserialization of the AST, enabling AI agents to generate and manipulate code more easily. See [GitHub Issues](https://github.com/justin4957/rusty-lisp/issues) for implementation progress.
+### AST Validation Engine
+- **Type Safety** - Detects type mismatches in operations (e.g., adding strings to numbers) ✅
+- **Resource Bounds** - Catches infinite loops and unbounded recursion patterns ✅
+- **FFI Restrictions** - Controls access to unsafe Rust operations and FFI calls ✅
+- **Complexity Limits** - Prevents overly complex AST structures (nesting depth) ✅
+- **Composable Validators** - Plugin architecture allows combining multiple validation rules ✅
+- **CLI Flag** - `--validate-safety` enables pre-compilation safety checks ✅
+- **Clear Error Messages** - Actionable validation errors with context ✅
+- **AI Safety** - Critical for validating AI-generated code before execution ✅
+
+> 📍 **Status**: Phase 2.1.1 (AST Validation) - Complete ✅. The compiler now includes comprehensive validation to ensure AI-generated code is safe before compilation. See [GitHub Issues](https://github.com/justin4957/rusty-lisp/issues) for implementation progress.
 
 
 ## Quick Start
@@ -103,6 +113,15 @@ cargo run -- --to-ir example.lisp > example.ir.json
 
 # Compile JSON IR to Rust
 cargo run -- --from-ir example.ir.json > output.rs
+```
+
+With AST validation (recommended for AI-generated code):
+```bash
+# Enable safety validation before compilation
+cargo run -- --validate-safety example.lisp > output.rs
+
+# Validation catches errors like type mismatches:
+# Error: (+ "string" 42) -> Type mismatch in arithmetic operation
 ```
 
 Compile and run the generated Rust:
@@ -316,6 +335,93 @@ rustc output.rs && ./output
 # Output: 7
 ```
 
+### AST Validation for Safe AI-Generated Code
+
+The validation engine provides comprehensive safety checks for AST structures before compilation. This is especially critical for AI-generated code to prevent common errors and unsafe operations.
+
+#### Validation Rules
+
+The validator implements four categories of safety checks:
+
+1. **Type Safety** - Catches basic type mismatches
+2. **Resource Bounds** - Detects infinite loops and unbounded recursion
+3. **FFI Restrictions** - Controls access to unsafe Rust operations
+4. **Complexity Limits** - Prevents overly complex AST structures
+
+#### Usage
+
+Enable validation with the `--validate-safety` flag:
+
+```bash
+cargo run -- --validate-safety example.lisp > output.rs
+```
+
+#### Examples
+
+**Type Safety Violation:**
+```lisp
+; This will fail validation
+(+ "hello" 42)
+
+; Error: Validation failed with 1 error(s):
+;   - TypeSafety violation: Type mismatch: arithmetic operation '+'
+;     requires numeric operands, got String
+```
+
+**Resource Bounds Violation:**
+```lisp
+; This will fail validation - obvious infinite recursion
+(define (infinite-loop) (infinite-loop))
+
+; Error: Validation failed with 1 error(s):
+;   - ResourceBounds violation: Infinite recursion detected:
+;     function 'infinite-loop' calls itself without any conditional base case
+```
+
+**FFI Restriction Violation:**
+```lisp
+; This will fail validation - unsafe operation not allowed
+(rust-unsafe "std::ptr::null()")
+
+; Error: Validation failed with 1 error(s):
+;   - FFIRestrictions violation: FFI restriction: unsafe operation
+;     'rust-unsafe' is not allowed
+```
+
+**Valid Code Passes:**
+```lisp
+; This passes validation
+(+ 1 (* 2 3))
+
+; Compiles successfully with validation enabled
+cargo run -- --validate-safety example.lisp > output.rs
+```
+
+#### Validation in the Pipeline
+
+Validation runs **before macro expansion** in the compilation pipeline:
+
+```
+Source → Parse → Transform → [VALIDATE] → Macro Expand → Compile → Rust
+```
+
+This ensures that:
+- Invalid code is caught early, before expensive macro expansion
+- Error messages reference the original source code structure
+- AI-generated code is verified for safety before execution
+- Multiple validation errors are reported together for efficient debugging
+
+#### Why Validation Matters for AI
+
+AI-generated code can contain subtle errors that are syntactically correct but semantically invalid:
+
+- **Type errors**: LLMs may mix incompatible types in operations
+- **Infinite loops**: Generated recursive functions may lack base cases
+- **Unsafe operations**: AI may attempt to generate unsafe Rust code
+- **Complex structures**: Generated code may exceed reasonable complexity bounds
+
+The validation engine catches these issues **before compilation**, providing a crucial safety layer for AI-first workflows.
+
 ## Examples
 
 ### Basic Arithmetic
@@ -350,14 +456,15 @@ println!("{:?}", { let base = 5; let height = 10; (0.5 * base * height) });  // 
 
 ## Architecture
 
-The compiler follows a traditional compilation pipeline with macro system extensions:
+The compiler follows a traditional compilation pipeline with macro system extensions and safety validation:
 
 1. **AST** (`src/ast.rs`) - Core `LispExpr` enum supporting both basic Lisp types and macro constructs
 2. **Lexer** (`src/lexer.rs`) - Tokenizes source code
 3. **Parser** (`src/parser.rs`) - Builds Abstract Syntax Tree
-4. **Macro Expander** (`src/macro_expander.rs`) - Expands macro calls with parameter substitution
-5. **Compiler** (`src/compiler.rs`) - Generates Rust code from expanded AST
-6. **CLI** (`src/main.rs`) - Command-line interface
+4. **Validator** (`src/validator.rs`) - Optional safety validation (type checking, resource bounds, FFI restrictions)
+5. **Macro Expander** (`src/macro_expander.rs`) - Expands macro calls with parameter substitution
+6. **Compiler** (`src/compiler.rs`) - Generates Rust code from expanded AST
+7. **CLI** (`src/main.rs`) - Command-line interface
 
 ### AST Structure
 The `LispExpr` enum supports:
@@ -367,10 +474,11 @@ The `LispExpr` enum supports:
 
 ### Current Pipeline
 ```
-Source → Lexer → Parser → [AST Transforms] → Macro Expander → Compiler → Rust Code
+Source → Lexer → Parser → [AST Transforms] → [Validator*] → Macro Expander → Compiler → Rust Code
+                                              (* optional with --validate-safety)
 ```
 
-The AST transform phase (Phase 1.5.2) allows plugins to modify the AST before macro expansion:
+The AST transform phase (Phase 1.5.2) allows plugins to modify the AST before macro expansion and validation:
 - **Transform Registry**: Manage multiple transform plugins
 - **Ordered Execution**: Transforms applied in registration order
 - **AI Integration**: Direct AST manipulation for refactoring, optimization, and instrumentation

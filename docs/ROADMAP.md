@@ -240,11 +240,11 @@ pub enum ValidationRule {
 - **Security Sandbox**: Restrict access to dangerous Rust features
 
 ### Deliverables:
-- [ ] `ASTValidator` trait and validation engine
-- [ ] Type inference system for basic safety
-- [ ] Resource bounds analysis (loop/recursion detection)
-- [ ] FFI safety controls (unsafe code restrictions)
-- [ ] CLI integration: `--validate-safety`
+- [x] `ASTValidator` trait and validation engine ✅ **COMPLETED** - [Issue #15](https://github.com/justin4957/rusty-lisp/issues/15)
+- [x] Type inference system for basic safety ✅ **COMPLETED** - [Issue #15](https://github.com/justin4957/rusty-lisp/issues/15)
+- [x] Resource bounds analysis (loop/recursion detection) ✅ **COMPLETED** - [Issue #15](https://github.com/justin4957/rusty-lisp/issues/15)
+- [x] FFI safety controls (unsafe code restrictions) ✅ **COMPLETED** - [Issue #15](https://github.com/justin4957/rusty-lisp/issues/15)
+- [x] CLI integration: `--validate-safety` ✅ **COMPLETED** - [Issue #15](https://github.com/justin4957/rusty-lisp/issues/15)
 
 ## 2.1.2 Trust & Sandbox Environment
 
