@@ -1,0 +1,53 @@
+You are a multi-agent system reviewing a software project roadmap. Please analyze the attached IMPROVEMENT_ROADMAP.md and provide comprehensive feedback.
+
+CONTEXT:
+- This is a Lisp-to-Rust compiler with macro system, AST validation, and sandbox environment
+- Goal: AI-first language combining Lisp flexibility with Rust performance
+- Current state: Core infrastructure complete, but lacks usability and production features
+- Target: Make it production-ready and user-friendly
+
+REVIEW AREAS:
+
+1. PRIORITY ANALYSIS
+   - Are the priorities correct? (Developer Experience → Language Features → Production → AI Integration)
+   - What should be moved up or down?
+   - Any critical gaps in prioritization?
+
+2. SCOPE & TIMELINE
+   - Is 8-10 weeks realistic for Phase 3?
+   - Are individual tasks sized appropriately?
+   - Should anything be split or combined?
+
+3. TECHNICAL APPROACH
+   - Are the proposed features technically sound?
+   - Any architectural concerns?
+   - Missing dependencies or prerequisites?
+
+4. RISK ASSESSMENT
+   - Are the identified risks complete?
+   - Any major risks missing?
+   - Are mitigation strategies adequate?
+
+5. VALUE PROPOSITION
+   - Will this roadmap deliver a usable product?
+   - Does it differentiate from competing tools?
+   - Are success metrics meaningful?
+
+6. ALTERNATIVE APPROACHES
+   - Are there better ways to sequence these features?
+   - Should we consider different architectural approaches?
+   - What about incremental release strategy?
+
+7. OPEN QUESTIONS
+   - Please answer the 8 open questions in the roadmap
+   - Provide reasoning for each answer
+
+DELIVERABLE:
+Please provide structured feedback in markdown format with:
+- Overall assessment (thumbs up/down, key concerns)
+- Detailed feedback by section
+- Answers to open questions
+- Recommended changes to priorities or approach
+- Any new ideas or opportunities identified
+
+Be critical but constructive. Challenge assumptions. Suggest alternatives.
